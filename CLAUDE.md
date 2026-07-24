@@ -8,10 +8,12 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : MVP fonctionnel figé au tag `v1.0.0-mvp.1` (branche `release/mvp-v1`).
-Backend et frontend passent respectivement ~129 et ~32 tests. SQLite + environnement
-de dev unique — pas encore prêt pour la production (migration PostgreSQL/Docker à
-venir, voir [.agents/workflows/fil-conducteur.md](.agents/workflows/fil-conducteur.md)).
+**État** : jalon PostgreSQL/Docker figé au tag `v1.0.0-mvp.2`. La ligne de
+développement active est `main` ; `release/mvp-v1` (historique) et
+`release/mvp-v2` (stabilisation courante) sont des lignes de release, taguées
+au besoin. Backend et frontend passent respectivement ~194 et ~32 tests.
+PostgreSQL 17 sous Docker Compose (`compose.yaml` prod-like, `compose.dev.yaml`
+pour l'itération) — voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
 - **Code** (variables, classes, champs DB) : anglais.
 - **UI, logs, commentaires métier** : français — volontaire et cohérent dans
@@ -33,8 +35,8 @@ dans son sous-module. `git status` à la racine ne montre que les pointeurs de
 sous-module, pas leur contenu interne : utiliser `git -C chm-backend status` /
 `git -C chm-frontend status` pour l'état réel de chaque application.
 
-Pour restaurer exactement le jalon MVP : `git checkout v1.0.0-mvp.1 && git
-submodule update --init --recursive`.
+Pour restaurer un jalon figé (ex. `v1.0.0-mvp.2`) : `git checkout <tag> &&
+git submodule update --init --recursive`.
 
 ## Commandes
 
@@ -43,7 +45,7 @@ submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~129 tests)
+pytest -q                           # suite complète (~194 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
@@ -80,16 +82,46 @@ TimeStampedModel (created_at/updated_at)
 Isolation appliquée sur deux couches à garder synchronisées pour tout nouveau
 modèle/ViewSet :
 - `core/middleware.py` (`ChoraleMiddleware`) pose `request.chorale` d'après
-  `membre.chorale` (superuser → `None`, non filtré ; **chorale suspendue**
-  `is_active=False` → `None` aussi, effet immédiat même sur un token JWT déjà émis).
+  `membre.chorale`, et `request.est_operateur` (**chorale suspendue**
+  `is_active=False` → `chorale = None`, effet immédiat même sur un token JWT
+  déjà émis).
 - `core/mixins.py` (`ChoraleFilterMixin`), sur chaque ViewSet, filtre
   `get_queryset()` et injecte `chorale` à la création. `SoftDeleteMixin`
   transforme `DELETE` en `soft_delete()`, exclut les supprimés sauf
-  `?include_deleted=true` (superuser), et laisse passer l'action `restore` sans
-  ce filtre (sinon 404 systématique sur l'objet qu'on veut justement restaurer).
+  `?include_deleted=true` (**opérateur uniquement**), et laisse passer l'action
+  `restore` sans ce filtre (sinon 404 systématique sur l'objet qu'on veut
+  justement restaurer).
 
 Tout nouveau modèle scopé chorale doit hériter `SoftDeleteModel`, sauf raison
 précise de ne pas l'être.
+
+### Opérateur de plateforme ≠ administrateur de tenant
+
+`core/tenancy.py` est la **source unique de vérité** : ne jamais tester
+`is_superuser` directement pour élargir un accès.
+- **Opérateur de plateforme** = superuser SANS aucun `Membre` → `request.chorale
+  = None`, accès global, gère les chorales (`est_operateur(user)` renvoie True).
+- **Superuser AVEC un `Membre`** = administrateur de tenant : scopé à sa chorale
+  exactement comme un membre normal. `is_superuser` **ne confère aucun droit
+  métier** — ses permissions viennent uniquement de ses `Mandat`s. Un fondateur
+  qui veut tout voir dans sa chorale reçoit un mandat bureau.
+- Un non-superuser n'est jamais opérateur.
+
+Conséquences : `IsInGroup`/`IsOwnerOrBureau` ne laissent passer d'office que
+l'opérateur ; l'admin Django est cloisonné (`core/admin_scoping.py` :
+`ChoraleScopedAdminMixin` scope les querysets, `PlateformeOnlyAdminMixin` masque
+Chorale/DemandeChorale/Group — les permissions Django ne suffisent pas, un
+superuser passe tous les `has_perm()`) ; le JWT porte un claim `is_operateur`
+distinct de `is_superuser` (devenu ambigu — le front doit lire `is_operateur`).
+
+**Dette front connue** : le frontend lit encore `is_superuser` à ~25 endroits
+(dont `AuthService.hasRole()`, qui renvoie `true` pour tout superuser). Un
+superuser scopé à une chorale (administrateur de tenant) voit donc
+aujourd'hui une UI « god-mode » alors que le backend refuse déjà ces actions
+côté API. Correction prévue au prochain jalon frontend : basculer ces
+lectures sur `is_operateur` (déjà présent dans `DecodedToken`). Volontairement
+non traité pendant le jalon de cloisonnement backend (aucun composant Angular
+touché sur cette session).
 
 ### RBAC : le pivot est `Mandat`, jamais un rôle fixe
 
@@ -109,7 +141,8 @@ Apps : `core`, `authentication`, `membres`, `musique`, `presences`, `finances`,
   sinon un membre restauré retrouve des permissions fantômes).
 - `core/permissions.py` (`IsBureau`, `IsTresorier`, `IsMaitreChoeur`,
   `IsBureauOrMaitreChoeur`, `IsBureauOrTresorier`, `IsOwnerOrBureau`…) checke
-  ces groupes. Superuser toujours passant.
+  ces groupes. Seul l'**opérateur de plateforme** passe d'office (pas tout
+  superuser — cf. « Opérateur de plateforme ≠ administrateur de tenant »).
 
 Tester/accorder une permission = créer/activer un `Mandat`, jamais éditer
 `user.groups` ni la classe de permission.
@@ -119,9 +152,9 @@ Tester/accorder une permission = créer/activer un `Mandat`, jamais éditer
 JWT (`djangorestframework-simplejwt`), access token **30 minutes** (les rôles
 décodés côté front se rafraîchissent au prochain refresh silencieux après un
 changement de mandat). `CustomTokenObtainPairSerializer` embarque `groups`,
-`is_superuser`, `chorale_nom`, `chorale_currency`, `membre_id`… — décodés côté
-Angular (`AuthService`), pas d'appel `/me/`. Nouveau claim utile au front →
-l'ajouter aussi dans `DecodedToken` (frontend).
+`is_superuser`, `is_operateur`, `chorale_nom`, `chorale_currency`, `membre_id`…
+— décodés côté Angular (`AuthService`), pas d'appel `/me/`. Nouveau claim utile
+au front → l'ajouter aussi dans `DecodedToken` (frontend).
 
 Pas d'auto-inscription libre. Deux voies pour une **nouvelle chorale**, jamais
 automatiques (toujours une revue humaine) :
@@ -191,9 +224,9 @@ switch, petit choix exclusif → segmented, liste → select, plage → slider.
 ## Pour aller plus loin
 
 - [README.md](README.md) — vue d'ensemble complète, installation, matrice des rôles.
-- [RELEASE_NOTES.md](RELEASE_NOTES.md) — périmètre figé par `v1.0.0-mvp.1`.
+- [RELEASE_NOTES.md](RELEASE_NOTES.md) — périmètre des jalons figés.
 - [.agents/workflows/fil-conducteur.md](.agents/workflows/fil-conducteur.md) —
-  état réel et feuille de route active (prochain jalon : PostgreSQL/Docker).
+  état réel et feuille de route active.
 - [.agents/rules/choir-manager-rules.md](.agents/rules/choir-manager-rules.md) —
   règles de design/UX du projet.
 - [chm-backend/README.md](chm-backend/README.md) /
