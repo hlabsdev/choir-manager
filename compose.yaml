@@ -21,6 +21,7 @@ services:
   # Base de données
   # --------------------------------------------------------------------------
   db:
+    container_name: choirmanager-db
     image: postgres:17-bookworm   # version majeure figée, identique dev/préprod/prod
     restart: unless-stopped
     environment:
@@ -49,6 +50,13 @@ services:
   # Migrations — service one-shot
   # --------------------------------------------------------------------------
   migrate:
+    # Pas de `container_name` ici (contrairement à db/backend/frontend) : ce
+    # service est relancé à la demande (`docker compose run --rm migrate`),
+    # potentiellement plusieurs fois de suite ou en parallèle dans un script.
+    # Un nom fixe ferait échouer la deuxième exécution tant que la première
+    # tourne encore ; le suffixe généré par Compose (`-run-<hash>`) évite ce
+    # conflit.
+    #
     # Pas de section `build:` volontairement : ce service RÉUTILISE l'image
     # construite par `backend` (§6.2). La déclarer ici ferait construire le même
     # tag par deux services en parallèle, ce qui échoue à l'export
@@ -92,6 +100,7 @@ services:
   # API Django
   # --------------------------------------------------------------------------
   backend:
+    container_name: choirmanager-backend
     build:
       context: ./chm-backend
     image: choirmanager-backend:latest
@@ -125,6 +134,7 @@ services:
   # Frontend Angular servi par Nginx
   # --------------------------------------------------------------------------
   frontend:
+    container_name: choirmanager-frontend
     build:
       context: ./chm-frontend
     image: choirmanager-frontend:latest

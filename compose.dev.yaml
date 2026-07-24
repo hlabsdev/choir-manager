@@ -7,14 +7,18 @@
 #
 # Ce fichier n'est JAMAIS utilisé en préproduction ni en production : il ouvre
 # des ports sur la machine et monte le code source dans les conteneurs.
-
-name: choirmanager
+#
+# Pas de `name:` ici (ni dans compose.api-direct.yaml) : ce fichier n'est
+# jamais lancé seul, toujours en surcharge de compose.yaml qui fixe déjà le
+# nom de projet. Le dupliquer ici n'apporterait rien et créerait un risque de
+# dérive si l'un des deux changeait sans l'autre.
 
 services:
 
   db:
     # Client SQL depuis l'hôte (psql, DBeaver…). Lié à 127.0.0.1 uniquement :
     # la base ne doit pas être joignable depuis le réseau local.
+    # (container_name hérité de compose.yaml — pas besoin de le répéter ici.)
     ports:
       - "127.0.0.1:5432:5432"
 
