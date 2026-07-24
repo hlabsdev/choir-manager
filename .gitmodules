@@ -1,0 +1,6 @@
+[submodule "chm-backend"]
+	path = chm-backend
+	url = https://github.com/hlabsdev/chm-backend.git
+[submodule "chm-frontend"]
+	path = chm-frontend
+	url = https://github.com/hlabsdev/chm-frontend.git

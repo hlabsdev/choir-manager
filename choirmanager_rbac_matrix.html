@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChoirManager — Matrice des droits RBAC</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f4f0;
+      color: #1a1a18;
+      margin: 0;
+      padding: 2rem 1rem;
+    }
+    .card {
+      max-width: 780px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      border: 0.5px solid rgba(0,0,0,0.12);
+      padding: 1.5rem 1.75rem 1.75rem;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 500;
+      margin: 0 0 0.25rem;
+      color: #1a1a18;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #73726c;
+      margin: 0 0 1.25rem;
+    }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem; }
+    .pill {
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1.5px solid #c2c0b6;
+      background: #f1efe8;
+      color: #5f5e5a;
+      transition: all .15s;
+      user-select: none;
+    }
+    .pill.on { background: #fff; border-color: var(--pc); color: var(--pc); }
+    .pt { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    .pt th, .pt td { padding: 7px 5px; text-align: center; border-bottom: 0.5px solid rgba(0,0,0,0.08); vertical-align: middle; }
+    .pt th:first-child, .pt td:first-child { text-align: left; padding-left: 2px; font-size: 13px; font-weight: 500; color: #1a1a18; width: 160px; }
+    .pt th { font-weight: 500; font-size: 11px; color: #73726c; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,0.15); line-height: 1.3; }
+    .pt td.hl { background: #f5f4f0; }
+    .pt th.hl { color: #1a1a18; }
+    .pt tr:last-child td { border-bottom: none; }
+    .b { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+    .bf { background: #d4edda; color: #1a5c2e; }
+    .bw { background: #cce3f5; color: #0c4474; }
+    .br { background: #f1efe8; color: #5f5e5a; border: 0.5px solid #c2c0b6; }
+    .bs { background: #faeeda; color: #633806; }
+    .bn { color: #b4b2a9; font-size: 15px; line-height: 1; }
+    .leg { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 1rem; padding-top: 1rem; border-top: 0.5px solid rgba(0,0,0,0.08); }
+    .li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #73726c; }
+    .dp { margin-top: 1rem; padding: 12px 16px; background: #f5f4f0; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.1); font-size: 13px; min-height: 56px; }
+    .dp h3 { margin: 0 0 5px; font-size: 14px; font-weight: 500; color: #1a1a18; }
+    .dp p { margin: 0; color: #5f5e5a; line-height: 1.5; }
+    .nt { display: inline-block; background: #faeeda; color: #633806; font-size: 11px; padding: 2px 7px; border-radius: 4px; margin-right: 4px; font-weight: 500; }
+    .stk { display: inline-block; background: #cce3f5; color: #0c4474; font-size: 11px; padding: 2px 7px; border-radius: 4px; margin-right: 4px; font-weight: 500; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1c1c1a; color: #e0dfd8; }
+      .card { background: #252523; border-color: rgba(255,255,255,0.1); }
+      h1 { color: #e0dfd8; }
+      .subtitle { color: #888780; }
+      .pill { background: #2c2c2a; border-color: #444441; color: #888780; }
+      .pill.on { background: #252523; }
+      .pt th, .pt td { border-bottom-color: rgba(255,255,255,0.07); }
+      .pt th:first-child, .pt td:first-child { color: #e0dfd8; }
+      .pt th { color: #888780; border-bottom-color: rgba(255,255,255,0.12); }
+      .pt td.hl { background: #2c2c2a; }
+      .pt th.hl { color: #e0dfd8; }
+      .bf { background: #1a3d24; color: #7ecf96; }
+      .bw { background: #0c2e45; color: #7bbee0; }
+      .br { background: #2c2c2a; color: #888780; border-color: #444441; }
+      .bs { background: #3d2a10; color: #f0b86a; }
+      .bn { color: #444441; }
+      .leg { border-top-color: rgba(255,255,255,0.07); }
+      .li { color: #888780; }
+      .dp { background: #2c2c2a; border-color: rgba(255,255,255,0.08); }
+      .dp h3 { color: #e0dfd8; }
+      .dp p { color: #888780; }
+      .nt { background: #3d2a10; color: #f0b86a; }
+      .stk { background: #0c2e45; color: #7bbee0; }
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Matrice des droits RBAC — ChoirManager</h1>
+  <p class="subtitle">Clique sur un rôle pour voir sa description, ses cas particuliers et son implémentation Django.</p>
+
+  <div class="pills" id="pills">
+    <button class="pill" style="--pc:#7F77DD" data-r="admin" onclick="sel('admin')">Admin</button>
+    <button class="pill" style="--pc:#1D9E75" data-r="bureau" onclick="sel('bureau')">Bureau</button>
+    <button class="pill" style="--pc:#BA7517" data-r="tres" onclick="sel('tres')">Trésorier</button>
+    <button class="pill" style="--pc:#D85A30" data-r="maestro" onclick="sel('maestro')">Maître de chœur</button>
+    <button class="pill" style="--pc:#378ADD" data-r="membre" onclick="sel('membre')">Membre actif</button>
+    <button class="pill" style="--pc:#888780" data-r="hon" onclick="sel('hon')">Honoraire</button>
+  </div>
+
+  <table class="pt" id="pt">
+    <thead>
+      <tr>
+        <th>Module</th>
+        <th data-c="0">Admin</th>
+        <th data-c="1">Bureau</th>
+        <th data-c="2">Trésorier</th>
+        <th data-c="3">Maître</th>
+        <th data-c="4">Membre</th>
+        <th data-c="5">Honoraire</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Membres &amp; Structure</td>
+        <td data-c="0"><span class="b bf">Complet</span></td>
+        <td data-c="1"><span class="b bf">Complet</span></td>
+        <td data-c="2"><span class="b br">Lecture</span></td>
+        <td data-c="3"><span class="b br">Lecture</span></td>
+        <td data-c="4"><span class="b bs">Personnel</span></td>
+        <td data-c="5"><span class="bn">—</span></td>
+      </tr>
+      <tr>
+        <td>Répétitions</td>
+        <td data-c="0"><span class="b bf">Complet</span></td>
+        <td data-c="1"><span class="b br">Lecture</span></td>
+        <td data-c="2"><span class="bn">—</span></td>
+        <td data-c="3"><span class="b bf">Complet</span></td>
+        <td data-c="4"><span class="b br">Lecture</span></td>
+        <td data-c="5"><span class="b br">Lecture</span></td>
+      </tr>
+      <tr>
+        <td>Répertoire Musical</td>
+        <td data-c="0"><span class="b bf">Complet</span></td>
+        <td data-c="1"><span class="b br">Lecture</span></td>
+        <td data-c="2"><span class="bn">—</span></td>
+        <td data-c="3"><span class="b bf">Complet</span></td>
+        <td data-c="4"><span class="b br">Lecture</span></td>
+        <td data-c="5"><span class="b br">Lecture</span></td>
+      </tr>
+      <tr>
+        <td>Finances &amp; Caisse</td>
+        <td data-c="0"><span class="b bf">Complet</span></td>
+        <td data-c="1"><span class="b br">Lecture</span></td>
+        <td data-c="2"><span class="b bf">Complet</span></td>
+        <td data-c="3"><span class="bn">—</span></td>
+        <td data-c="4"><span class="b bs">Personnel</span></td>
+        <td data-c="5"><span class="bn">—</span></td>
+      </tr>
+      <tr>
+        <td>Rapports &amp; Exports</td>
+        <td data-c="0"><span class="b bf">Complet</span></td>
+        <td data-c="1"><span class="b bf">Complet</span></td>
+        <td data-c="2"><span class="b bf">Complet</span></td>
+        <td data-c="3"><span class="b br">Lecture</span></td>
+        <td data-c="4"><span class="bn">—</span></td>
+        <td data-c="5"><span class="bn">—</span></td>
+      </tr>
+      <tr>
+        <td>Activités &amp; Planning</td>
+        <td data-c="0"><span class="b bf">Complet</span></td>
+        <td data-c="1"><span class="b bf">Complet</span></td>
+        <td data-c="2"><span class="b br">Lecture</span></td>
+        <td data-c="3"><span class="b bw">Écriture</span></td>
+        <td data-c="4"><span class="b br">Lecture</span></td>
+        <td data-c="5"><span class="bn">—</span></td>
+      </tr>
+      <tr>
+        <td>Administration</td>
+        <td data-c="0"><span class="b bf">Complet</span></td>
+        <td data-c="1"><span class="bn">—</span></td>
+        <td data-c="2"><span class="bn">—</span></td>
+        <td data-c="3"><span class="bn">—</span></td>
+        <td data-c="4"><span class="bn">—</span></td>
+        <td data-c="5"><span class="bn">—</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="leg">
+    <div class="li"><span class="b bf">Complet</span> Créer, modifier, supprimer, exporter</div>
+    <div class="li"><span class="b bw">Écriture</span> Créer et modifier (pas supprimer)</div>
+    <div class="li"><span class="b br">Lecture</span> Consulter uniquement</div>
+    <div class="li"><span class="b bs">Personnel</span> Ses propres données uniquement</div>
+    <div class="li"><span class="bn" style="font-size:14px">—</span> Aucun accès</div>
+  </div>
+
+  <div class="dp" id="dp"><p>Clique sur un rôle pour voir sa description, ses cas particuliers et son implémentation Django.</p></div>
+</div>
+
+<script>
+const info = {
+  admin: {
+    t: 'Admin — Super Administrateur',
+    d: 'Accès total sur tous les modules. Gère les paramètres système, crée les comptes utilisateurs et attribue les rôles. En pratique : le fondateur ou le responsable technique. Ce rôle ne devrait jamais être attribué à un dirigeant de la chorale sans formation.',
+    n: null,
+    s: null
+  },
+  bureau: {
+    t: 'Bureau — Membres élus',
+    d: 'Gestion complète des membres, du planning et des rapports d\'activité. Voit les finances en lecture (ne peut pas saisir de mouvements). Le Président et le Secrétaire sont dans ce rôle. Cumulez avec Trésorier pour le vrai trésorier.',
+    n: 'Rôle cumulable : une personne peut avoir Bureau + Trésorier ou Bureau + Maître de chœur simultanément.',
+    s: 'Django : group "bureau" avec permissions codename sur les models. Sérialiser les groupes dans le token JWT.'
+  },
+  tres: {
+    t: 'Trésorier',
+    d: 'Accès complet aux Finances & Caisse et aux rapports financiers. N\'a pas accès à la gestion des membres ni aux répétitions. Ce rôle se cumule toujours avec Bureau dans un vrai bureau de chorale.',
+    n: 'Principe du moindre privilège : séparation stricte entre gestion administrative et gestion financière.',
+    s: 'Django : group "tresorier". Vérifier has_perm("finances.add_mouvement") dans les views DRF.'
+  },
+  maestro: {
+    t: 'Maître de chœur',
+    d: 'Contrôle total sur les Répétitions (présences, résumés, notes de séance) et le Répertoire Musical (chants appris, partitions, métadonnées). Peut proposer des activités mais non les supprimer. Aucun accès aux données financières.',
+    n: 'Rôle fonctionnel, non hiérarchique. Un Maître de chœur peut aussi être membre du Bureau si élu.',
+    s: 'Django : group "maitre_choeur". Écriture sur Activités = permission add + change sans delete.'
+  },
+  membre: {
+    t: 'Membre actif',
+    d: 'Accès en lecture sur le répertoire et le planning des concerts. Voit ses propres présences et uniquement l\'état de ses propres cotisations (payé / impayé), pas celles des autres membres.',
+    n: 'Permission "Personnel" = filtre object-level : queryset.filter(membre=request.user.membre).',
+    s: 'Django : group "membre_actif". Utiliser django-rules ou surcharger get_queryset() dans les ViewSets DRF.'
+  },
+  hon: {
+    t: 'Honoraire',
+    d: 'Accès très minimal. Peut consulter le répertoire musical (chants, styles) et le calendrier des concerts publics. Aucun accès aux données internes : membres, finances, présences, rapports.',
+    n: null,
+    s: 'Django : group "membre_honoraire". Par défaut, tout est interdit sauf les endpoints publics explicitement ouverts.'
+  }
+};
+
+const cm = { admin: 0, bureau: 1, tres: 2, maestro: 3, membre: 4, hon: 5 };
+let active = null;
+
+function sel(r) {
+  const c = cm[r];
+  if (active === r) {
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('on'));
+    document.querySelectorAll('[data-c]').forEach(e => e.classList.remove('hl'));
+    document.getElementById('dp').innerHTML = '<p>Clique sur un rôle pour voir sa description, ses cas particuliers et son implémentation Django.</p>';
+    active = null;
+    return;
+  }
+  active = r;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('on'));
+  document.querySelector('[data-r="' + r + '"]').classList.add('on');
+  document.querySelectorAll('[data-c]').forEach(e => e.classList.remove('hl'));
+  document.querySelectorAll('[data-c="' + c + '"]').forEach(e => e.classList.add('hl'));
+  const d = info[r];
+  let h = '<h3>' + d.t + '</h3><p>' + d.d + '</p>';
+  if (d.n) h += '<p style="margin-top:8px"><span class="nt">Cumul</span>' + d.n + '</p>';
+  if (d.s) h += '<p style="margin-top:8px"><span class="stk">Django</span>' + d.s + '</p>';
+  document.getElementById('dp').innerHTML = h;
+}
+</script>
+</body>
+</html>
