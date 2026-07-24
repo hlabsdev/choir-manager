@@ -1,0 +1,152 @@
+# ============================================================================
+# ChoirManager — Pile production-like
+# ============================================================================
+# Quatre services : db, migrate (one-shot), backend, frontend.
+#
+# Ordre de démarrage garanti par les conditions :
+#   db (healthy) → migrate (completed successfully) → backend (healthy) → frontend
+#
+# Les migrations sont jouées UNE fois par le service `migrate`, jamais par
+# l'entrypoint du backend : les rejouer dans chaque worker Gunicorn les mettrait
+# en concurrence les unes avec les autres.
+#
+# Surcharges de développement (ports exposés, rechargement) : compose.dev.yaml
+#   docker compose -f compose.yaml -f compose.dev.yaml up
+
+name: choirmanager
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Base de données
+  # --------------------------------------------------------------------------
+  db:
+    image: postgres:17-bookworm   # version majeure figée, identique dev/préprod/prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB manquant}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER manquant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}
+      # Le fuseau applicatif est Africa/Lome ; on garde la base en UTC et on
+      # laisse Django convertir (USE_TZ=True).
+      PGTZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` seul répond « prêt » trop tôt pendant l'initdb : on cible
+      # explicitement la base et l'utilisateur applicatifs.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -q"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    # Aucun port publié : la base n'est joignable que depuis le réseau Compose.
+    # Le développement l'expose sur 127.0.0.1 via compose.dev.yaml.
+    stop_grace_period: 30s
+    networks: [chm]
+
+  # --------------------------------------------------------------------------
+  # Migrations — service one-shot
+  # --------------------------------------------------------------------------
+  migrate:
+    # Pas de section `build:` volontairement : ce service RÉUTILISE l'image
+    # construite par `backend` (§6.2). La déclarer ici ferait construire le même
+    # tag par deux services en parallèle, ce qui échoue à l'export
+    # (« image already exists »). `pull_policy: never` évite que Compose tente
+    # d'aller chercher ce tag local sur un registre.
+    image: choirmanager-backend:latest
+    pull_policy: never
+    restart: "no"                        # une exécution, pas de boucle
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &django_env
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL manquante}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY manquante}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?DJANGO_ALLOWED_HOSTS manquants}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+      # La pile est servie en HTTP derrière Nginx sur la machine locale ; la
+      # redirection TLS appartient au reverse-proxy public, pas à Django.
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-False}
+      # Pile locale servie en clair : des cookies `Secure` ne seraient
+      # jamais renvoyes par le navigateur (connexion admin impossible).
+      DJANGO_COOKIE_SECURE: ${DJANGO_COOKIE_SECURE:-True}
+      CORS_ALLOW_ALL_ORIGINS: ${CORS_ALLOW_ALL_ORIGINS:-False}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-ChoirManager <no-reply@example.invalid>}
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    networks: [chm]
+
+  # --------------------------------------------------------------------------
+  # API Django
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./chm-backend
+    image: choirmanager-backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully   # ne démarre pas si migrate échoue
+    environment:
+      <<: *django_env
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}   # à mesurer sur la cible, pas à recopier
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
+    volumes:
+      - media_data:/app/media
+    # Port 8000 joignable seulement depuis le réseau Compose (aucun `ports:`).
+    expose:
+      - "8000"
+    healthcheck:
+      # urllib plutôt que curl : l'image est volontairement minimale.
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/core/health/', timeout=5).status==200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    networks: [chm]
+
+  # --------------------------------------------------------------------------
+  # Frontend Angular servi par Nginx
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./chm-frontend
+    image: choirmanager-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy   # le proxy /api/ exige un backend sain
+    # Seul port utilisateur de la pile, lié à la boucle locale.
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
+    volumes:
+      # Les médias sont servis directement par Nginx : hors DEBUG, Django ne
+      # sert pas MEDIA_URL (cf. chm_config/urls.py).
+      - media_data:/usr/share/nginx/media:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [chm]
+
+volumes:
+  postgres_data:
+  media_data:
+
+networks:
+  chm:
+    driver: bridge

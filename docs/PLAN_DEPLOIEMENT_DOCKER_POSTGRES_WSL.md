@@ -71,6 +71,7 @@ git pull --ff-only
 git submodule sync --recursive
 git submodule update --init --recursive
 ```
+PS le clone sous wsl est deja present et c'est elle que nous utilisaons donc maintenant. aussi si necessaire pense a creer un venv dedie pour les comandes a lancer (a moins ce que tu puisse les lancer dorectment sous les dockers des au'ils seront pret)
 
 Vérifier ensuite :
 
@@ -100,7 +101,7 @@ Ne pas copier dans WSL :
 - des fichiers contenant des secrets.
 
 Ouvrir le dossier depuis WSL avec `code .` si VS Code et son extension WSL sont
-utilisés.
+utilisés(deja fait on est actuelement dans vscode sous wsl).
 
 ## 3. Branches à utiliser pour l'implémentation
 
@@ -495,6 +496,22 @@ Pour chaque domaine métier :
 - les notifications restent filtrées par destinataire ;
 - la suspension d'une chorale bloque accès et invitations ;
 - le superutilisateur conserve son comportement global explicitement testé.
+
+> **Avenant A — comportement superutilisateur : ne pas le figer.**
+>
+> Le dernier point ci-dessus est volontairement **gelé en l'état** pour ce
+> jalon. Les tests existants qui décrivent le superutilisateur comme voyant
+> toutes les chorales (`core/tests/test_api_integration.py`) sont conservés,
+> mais **aucun nouveau test ne doit graver cette règle**.
+>
+> Raison : la règle « superuser voit toutes les chorales » change au jalon
+> suivant. Multiplier les tests qui l'affirment transformerait un choix produit
+> révisable en contrainte de régression, et rendrait le prochain jalon
+> inutilement coûteux.
+>
+> Concrètement, pour la migration PostgreSQL/Docker : ne pas étendre la
+> couverture du comportement global du superutilisateur ; se limiter à vérifier
+> que la bascule de base de données ne l'a pas altéré.
 
 ### 10.2 Contraintes et index
 

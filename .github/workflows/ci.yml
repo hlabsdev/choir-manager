@@ -1,0 +1,171 @@
+# ============================================================================
+# ChoirManager — Intégration continue
+# ============================================================================
+# Le superprojet porte la CI ; les sous-modules sont récupérés via
+# `submodules: recursive`. Les tests backend s'exécutent contre un vrai service
+# PostgreSQL : depuis le jalon Docker/PostgreSQL, une suite SQLite ne vaut plus
+# validation (contraintes, verrous et types diffèrent).
+
+name: CI
+
+on:
+  push:
+    branches: [main, "release/**", "feat/**"]
+  pull_request:
+    branches: [main, "release/**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # --------------------------------------------------------------------------
+  backend:
+    name: Backend — pytest sous PostgreSQL
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Même version majeure qu'en développement et en production.
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_DB: choirmanager
+          POSTGRES_USER: choirmanager
+          POSTGRES_PASSWORD: choirmanager-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U choirmanager -d choirmanager"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # Le rôle de CI doit pouvoir créer et détruire la base de test Django.
+      # Ce privilège ne doit PAS être accordé au rôle applicatif de production.
+      DATABASE_URL: postgresql://choirmanager:choirmanager-ci@localhost:5432/choirmanager
+      DJANGO_SECRET_KEY: ci-only-not-a-production-secret
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      DJANGO_SECURE_SSL_REDIRECT: "False"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: chm-backend/requirements.txt
+
+      # WeasyPrint charge Pango/Cairo au runtime : sans ces libs, les tests
+      # d'export PDF ne valideraient que le chemin de dégradation en 503.
+      - name: Dépendances système (WeasyPrint)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 shared-mime-info
+
+      - name: Dépendances Python
+        working-directory: chm-backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Aucune migration manquante
+        working-directory: chm-backend
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: manage.py check
+        working-directory: chm-backend
+        run: python manage.py check
+
+      # Garde-fou §9.1 : une baisse silencieuse du nombre de tests doit arrêter
+      # la validation, pas passer inaperçue.
+      - name: Baseline — au moins 129 tests collectés
+        working-directory: chm-backend
+        run: |
+          total=$(pytest --collect-only -q | tail -1 | grep -oE '^[0-9]+')
+          echo "Tests collectés : $total"
+          if [ "$total" -lt 129 ]; then
+            echo "::error::Régression de couverture : $total tests collectés, minimum attendu 129."
+            exit 1
+          fi
+
+      - name: pytest
+        working-directory: chm-backend
+        run: pytest -q
+
+      - name: Contrôles de déploiement
+        working-directory: chm-backend
+        run: python manage.py check --deploy
+
+  # --------------------------------------------------------------------------
+  frontend:
+    name: Frontend — Vitest et build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: chm-frontend/package-lock.json
+
+      - name: Dépendances
+        working-directory: chm-frontend
+        run: npm ci
+
+      - name: Vitest
+        working-directory: chm-frontend
+        run: npm test
+
+      # `npm run build` compile Tailwind v4 AVANT `ng build` : Tailwind n'est
+      # pas branché sur le pipeline esbuild d'Angular.
+      - name: Build de production
+        working-directory: chm-frontend
+        run: npm run build
+
+      # La cible de production est same-origin : aucune URL backend absolue ne
+      # doit subsister dans le bundle livré.
+      - name: Aucune URL backend en dur dans le bundle
+        working-directory: chm-frontend
+        run: |
+          if grep -rqE 'https?://[^"]*:8000' dist/; then
+            echo "::error::URL backend absolue détectée dans le bundle de production :"
+            grep -rhoE 'https?://[^"]*:8000[^"]*' dist/ | sort -u
+            exit 1
+          fi
+          echo "OK — bundle same-origin."
+
+  # --------------------------------------------------------------------------
+  images:
+    name: Images Docker — build et audit de contenu
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configuration Compose valide
+        run: |
+          cp .env.example .env
+          docker compose config >/dev/null
+          echo "OK — compose.yaml valide."
+
+      - name: Build des images
+        run: |
+          docker build -t choirmanager-backend:latest ./chm-backend
+          docker build -t choirmanager-frontend:latest ./chm-frontend
+
+      # §11 : ni secret, ni donnée SQLite, ni dépôt Git, ni venv dans l'image.
+      - name: Audit du contenu des images
+        run: make audit-image

@@ -1,0 +1,35 @@
+# ============================================================================
+# ChoirManager — Surcharge : publier l'API sur l'hôte
+# ============================================================================
+# Usage :
+#   docker compose -f compose.yaml -f compose.api-direct.yaml up -d
+#   (ou `make up-api`)
+#
+# Pourquoi ce fichier séparé ?
+#
+# `compose.yaml` ne publie volontairement AUCUN port pour le backend : dans la
+# pile cible, l'API est same-origin et n'est jointe que par le proxy Nginx du
+# frontend (`/api/`, `/admin/`, `/static/`). C'est la configuration à déployer.
+#
+# Mais pour inspecter l'API directement (client REST, `manage.py runserver`
+# absent, debug d'un en-tête), il est pratique de l'atteindre sans passer par
+# Nginx. Cette surcharge le permet **sans** basculer en mode développement :
+# on garde Gunicorn, DJANGO_DEBUG=False et la configuration durcie, contrairement
+# à `compose.dev.yaml` qui, lui, repasse en `runserver` et DEBUG=True.
+#
+# Le port est lié à 127.0.0.1 : joignable depuis la machine, jamais depuis le
+# réseau local. Ne pas utiliser cette surcharge en préproduction ni en
+# production.
+
+services:
+
+  backend:
+    ports:
+      - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
+    environment:
+      # L'accès direct se fait sur un autre hôte:port que le proxy Nginx : sans
+      # l'ajouter, Django rejette la requête (ALLOWED_HOSTS) et refuse la
+      # connexion à l'admin (vérification d'origine CSRF).
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DJANGO_CSRF_TRUSTED_ORIGINS: >-
+        ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080},http://localhost:8000,http://127.0.0.1:8000

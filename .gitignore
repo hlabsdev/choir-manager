@@ -7,6 +7,25 @@
 docs/rendered/
 docs/.rendered/
 
+# Secrets et configuration d'environnement — jamais commités.
+# Seul .env.example, qui ne contient que des valeurs factices, est suivi.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Sauvegardes et exports locaux (dumps PostgreSQL, archives de médias,
+# copies de db.sqlite3 réalisées avant migration).
+backups/
+*.dump
+*.sql.gz
+*.sqlite3.bak
+
+# Volumes et données de conteneurs montés depuis l'hôte
+.docker/
+volumes/
+
 # Fichiers système
 .DS_Store
 Thumbs.db

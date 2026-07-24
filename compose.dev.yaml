@@ -1,0 +1,40 @@
+# ============================================================================
+# ChoirManager — Surcharges de développement
+# ============================================================================
+# Usage :
+#   docker compose -f compose.yaml -f compose.dev.yaml up
+#   (ou simplement `make dev`, qui pose les deux fichiers)
+#
+# Ce fichier n'est JAMAIS utilisé en préproduction ni en production : il ouvre
+# des ports sur la machine et monte le code source dans les conteneurs.
+
+name: choirmanager
+
+services:
+
+  db:
+    # Client SQL depuis l'hôte (psql, DBeaver…). Lié à 127.0.0.1 uniquement :
+    # la base ne doit pas être joignable depuis le réseau local.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  backend:
+    environment:
+      # Traces Django lisibles pendant le développement. La configuration reste
+      # celle du conteneur (DATABASE_URL obligatoire, pas de repli SQLite).
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,backend"
+    volumes:
+      # Le code monté par-dessus l'image permet d'itérer sans reconstruire.
+      # `staticfiles` reste celui de l'image (collecté à la construction).
+      - ./chm-backend:/app
+      - /app/staticfiles
+      - media_data:/app/media
+    # API atteignable directement depuis l'hôte, en plus du proxy Nginx.
+    ports:
+      - "127.0.0.1:8000:8000"
+    command:
+      - python
+      - manage.py
+      - runserver
+      - "0.0.0.0:8000"
