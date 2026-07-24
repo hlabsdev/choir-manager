@@ -36,10 +36,9 @@ En cas de contradiction, appliquer cet ordre :
 4. README global et présent fil conducteur ;
 5. anciens documents de conception et échanges historiques.
 
-`CLAUDE.md` reste utile pour les conventions d'architecture, mais certaines de
-ses indications opérationnelles datent d'une phase antérieure — notamment
-l'absence supposée de tests et l'ancien guard des finances. Le code actuel et
-les README des sous-projets priment sur ces passages.
+`CLAUDE.md` et `AGENTS.md` sont les guides opérationnels respectifs de Claude
+Code et Codex. Ils sont synchronisés sur l'architecture actuelle du
+superprojet ; le code et les tests restent néanmoins la preuve ultime.
 
 ## 2. Verdict produit
 
@@ -134,8 +133,8 @@ Ces règles ne sont pas négociables lors des prochaines étapes :
   portable telle quelle ;
 - les dépendances système de WeasyPrint ne sont pas provisionnées
   automatiquement ;
-- certaines indications de `CLAUDE.md` doivent être réalignées avec l'état
-  actuel lors de la prochaine passe de documentation technique.
+- `CLAUDE.md` et `AGENTS.md` doivent rester synchronisés lorsque les conventions
+  opérationnelles ou l'architecture du superprojet évoluent.
 
 ## 6. Jalon actif — Préproduction sécurisée
 

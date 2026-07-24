@@ -447,5 +447,6 @@ module Activités/Planning complet.
 - [README backend](chm-backend/README.md)
 - [README frontend](chm-frontend/README.md)
 - [Notes de version](RELEASE_NOTES.md)
-- [Conventions de travail](CLAUDE.md)
+- [Instructions Claude Code](CLAUDE.md)
+- [Instructions Codex](AGENTS.md)
 - [Règles spécifiques ChoirManager](.agents/rules/choir-manager-rules.md)
