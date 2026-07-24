@@ -590,6 +590,30 @@ Avant le pilote :
 `docker compose down` ne doit pas effacer les données. Ne jamais utiliser
 `docker compose down -v` hors d'un environnement jetable explicitement confirmé.
 
+> **Dette explicite pour le jalon déploiement — restauration `pg_dump`/`pg_restore`.**
+>
+> Une restauration a été exercée **une fois, manuellement**, pendant la bascule
+> initiale (§8) : `pg_dump -Fc` de la base de travail, restauration dans une
+> base PostgreSQL neuve (`choirmanager_restore`), comparaison des volumétries
+> (`chorales`, `membres`, `users`, `mandats`) — identiques des deux côtés. Ce
+> n'était **pas** un test automatisé : aucun job CI ni test pytest n'exerce ce
+> chemin, rien ne le rejoue à chaque changement de schéma, et il n'a été mené
+> qu'une fois sur un volume de données modeste (quelques dizaines de lignes).
+>
+> Restent non faits, à traiter avant tout pilote réel :
+> - sauvegarde chiffrée et politique de rétention (§12, points « chiffrer » et
+>   « définir leur rétention ») — non implémentées ;
+> - sauvegarde séparée des médias (`media_data`) — documentée dans
+>   `docs/DEPLOIEMENT.md` mais jamais exécutée ;
+> - mesure du temps réel de restauration ;
+> - validation qu'une sauvegarde d'une version donnée se restaure avec les
+>   migrations de cette même version (rollback, cf. §8 de `DEPLOIEMENT.md`) ;
+> - un test automatisé (ou au moins une procédure documentée rejouée
+>   régulièrement) plutôt qu'une vérification ad hoc.
+>
+> Ne pas considérer le critère correspondant du §13 comme acquis tant que ce
+> qui précède n'est pas fait.
+
 ## 13. Critères d'acceptation du jalon
 
 La migration Docker/PostgreSQL est terminée seulement si :

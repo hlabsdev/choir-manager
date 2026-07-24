@@ -71,7 +71,11 @@ services:
       DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-False}
       # Pile locale servie en clair : des cookies `Secure` ne seraient
       # jamais renvoyes par le navigateur (connexion admin impossible).
+      # Desactiver Secure exige EN PLUS DJANGO_ACCEPT_INSECURE_COOKIES=True
+      # (dérogation explicite, cf. chm_config/env.py) : un simple oubli de
+      # variable ne doit pas suffire à obtenir des cookies non sécurisés.
       DJANGO_COOKIE_SECURE: ${DJANGO_COOKIE_SECURE:-True}
+      DJANGO_ACCEPT_INSECURE_COOKIES: ${DJANGO_ACCEPT_INSECURE_COOKIES:-False}
       CORS_ALLOW_ALL_ORIGINS: ${CORS_ALLOW_ALL_ORIGINS:-False}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}

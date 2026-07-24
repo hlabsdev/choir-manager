@@ -136,10 +136,25 @@ sont marqués `Secure`. **Un navigateur ne renvoie jamais un cookie `Secure` sur
 une connexion HTTP** — sur la pile locale servie en clair, la connexion à
 l'admin Django échouerait alors en 403 CSRF, le cookie n'étant jamais retourné.
 
-C'est pourquoi le `.env` local pose `DJANGO_COOKIE_SECURE=False`. **Repasser à
-`True` dès qu'un TLS est en place.** Tant que cette valeur est `False`,
-`check --deploy` signale `W012` et `W016` : c'est attendu, ce sont les deux
-avertissements qui correspondent exactement à ce débrayage.
+Contrairement à `SECRET_KEY`/`ALLOWED_HOSTS`/CORS (aucune raison légitime
+d'être permissifs), désactiver `Secure` a un usage réel : cette pile locale
+sans TLS. Poser `DJANGO_COOKIE_SECURE=False` seul, hors `DJANGO_DEBUG=True`,
+**ne suffit donc plus** — il faut EN PLUS la dérogation explicite :
+
+```dotenv
+DJANGO_COOKIE_SECURE=False
+DJANGO_ACCEPT_INSECURE_COOKIES=True
+```
+
+Sans cette seconde variable (nom volontairement sans ambiguïté), le démarrage
+échoue avec un message explicite plutôt que de démarrer silencieusement avec
+des cookies non sécurisés — par exemple si un `.env` de dev est recopié sur un
+environnement `DJANGO_DEBUG=False` sans relecture attentive.
+
+**Repasser `DJANGO_COOKIE_SECURE` à `True` (et retirer la dérogation) dès
+qu'un TLS est en place.** Tant que `False`, `check --deploy` signale `W012` et
+`W016` : c'est attendu, ce sont les deux avertissements qui correspondent
+exactement à ce débrayage.
 
 `DJANGO_CSRF_TRUSTED_ORIGINS` doit lister l'origine **avec son port** par
 laquelle l'admin est atteint (`http://127.0.0.1:8080`), Django comparant
