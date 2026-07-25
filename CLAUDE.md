@@ -11,7 +11,7 @@ rapports. API Django REST + frontend Angular 21.
 **État** : jalon PostgreSQL/Docker figé au tag `v1.0.0-mvp.2`. La ligne de
 développement active est `main` ; `release/mvp-v1` (historique) et
 `release/mvp-v2` (stabilisation courante) sont des lignes de release, taguées
-au besoin. Backend et frontend passent respectivement ~194 et ~32 tests.
+au besoin. Backend et frontend passent respectivement ~217 et ~32 tests.
 PostgreSQL 17 sous Docker Compose (`compose.yaml` prod-like, `compose.dev.yaml`
 pour l'itération) — voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
@@ -45,7 +45,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~194 tests)
+pytest -q                           # suite complète (~217 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
@@ -81,10 +81,12 @@ TimeStampedModel (created_at/updated_at)
 
 Isolation appliquée sur deux couches à garder synchronisées pour tout nouveau
 modèle/ViewSet :
-- `core/middleware.py` (`ChoraleMiddleware`) pose `request.chorale` d'après
-  `membre.chorale`, et `request.est_operateur` (**chorale suspendue**
-  `is_active=False` → `chorale = None`, effet immédiat même sur un token JWT
-  déjà émis).
+- `core/tenancy.py` résout le **tenant actif** : `chorale_active(request)`,
+  `membre_actif(request)`, `roles_dans(request)`, `requete_est_operateur(request)`.
+  Ce sont des **fonctions appelées au point d'usage**, jamais des attributs de
+  requête — `request.chorale` et `request.est_operateur` n'existent plus (voir
+  « Un User, N chorales »). `core/middleware.py` ne pose plus que le cache de
+  résolution.
 - `core/mixins.py` (`ChoraleFilterMixin`), sur chaque ViewSet, filtre
   `get_queryset()` et injecte `chorale` à la création. `SoftDeleteMixin`
   transforme `DELETE` en `soft_delete()`, exclut les supprimés sauf
@@ -94,6 +96,46 @@ modèle/ViewSet :
 
 Tout nouveau modèle scopé chorale doit hériter `SoftDeleteModel`, sauf raison
 précise de ne pas l'être.
+
+### Un User, N chorales — les permissions vivent sur le tenant, pas sur le User
+
+`Membre.user` est une **ForeignKey** (`related_name="membres"`), avec
+`UniqueConstraint(user, chorale)` : un compte a un `Membre` **par chorale**.
+`user.membre` n'existe plus — utiliser `core.tenancy.membre_de(user, chorale)`
+ou `membre_actif(request)`.
+
+**`user.groups` n'est plus source de vérité et la table est vide** (purgée par
+`membres/0007`, plus aucune écriture depuis `membres/signals.py`). Les groupes
+Django restent le **vocabulaire** des rôles (`Poste.groupes`) mais ne sont plus
+portés par le compte : ils y seraient globaux, donc un mandat de trésorier dans
+la chorale A ferait passer `IsTresorier` dans la chorale B. Les rôles sont
+résolus à la volée par `roles_dans(request)` — mandats actifs du `Membre` du
+tenant actif, une requête SQL mémorisée par requête. **Ne jamais rétablir
+d'écriture dans `user.groups`** : ce serait une seconde source de vérité,
+fausse par construction.
+
+Le tenant actif vient du claim JWT `chorale_id`, mais n'est **jamais** servi sur
+la foi du claim : `chorale_active()` revérifie en base l'appartenance vivante et
+l'activité de la chorale (une appartenance a pu être révoquée depuis l'émission,
+et SimpleJWT recopie les claims du refresh vers chaque access token).
+`POST /api/auth/switch-chorale/` réémet un couple access/refresh — changer de
+chorale n'est pas un toggle ; l'ancien token reste sur l'ancien tenant.
+
+Défaut à la connexion : la **dernière chorale utilisée**
+(`Membre.derniere_activation_le`), départagée par `pk` croissant.
+
+**Session sans tenant actif** (exclu, chorale suspendue, invitation pas encore
+acceptée) : la connexion est **toujours permise** — refuser produirait un 401
+indistinguable d'un mauvais mot de passe. Elle n'ouvre que profil, invitations
+en attente et adhésion par code ; aucune donnée métier. Sans tenant ≠ opérateur :
+`est_operateur` exige `is_superuser` **ET** aucun `Membre`, la conjonction est
+indissociable.
+
+`Membre.soft_delete()` ne touche plus à `user.is_active` : retirer quelqu'un
+d'une chorale ne ferme pas un compte légitime ailleurs. Toute adhésion passe par
+`membres/services.py::adherer()`, qui **restaure** un membre soft-deleted au lieu
+d'en créer un second (la contrainte d'unicité l'interdit) sans relever les
+mandats clos.
 
 ### Opérateur de plateforme ≠ administrateur de tenant
 
@@ -114,6 +156,19 @@ Chorale/DemandeChorale/Group — les permissions Django ne suffisent pas, un
 superuser passe tous les `has_perm()`) ; le JWT porte un claim `is_operateur`
 distinct de `is_superuser` (devenu ambigu — le front doit lire `is_operateur`).
 
+**L'accès admin dépend de `est_operateur`, jamais des groupes** (qui ne sont
+plus portés par le compte). `ChoraleScopedAdminMixin` scope **deux** surfaces,
+à garder synchronisées : `get_queryset()` pour les listes, ET
+`formfield_for_foreignkey()`/`formfield_for_manytomany()` pour les listes
+déroulantes des formulaires. Ces dernières ne filtrent rien par défaut : sans
+elles, le formulaire d'un Poste ou d'un Membre expose le nom de **toutes** les
+chorales de la plateforme, et les objets des autres tenants dans ses autres
+relations — une fuite invisible dans les listes. Un administrateur
+de tenant rattaché à UNE chorale est scopé ; rattaché à plusieurs, il ne voit rien —
+l'admin s'authentifie par session, sans claim de tenant, et y inventer un
+tenant de session ouvrirait une troisième source de vérité. L'admin est un
+outil d'exploitation opérateur, pas un second front métier.
+
 **Dette front connue** : le frontend lit encore `is_superuser` à ~25 endroits
 (dont `AuthService.hasRole()`, qui renvoie `true` pour tout superuser). Un
 superuser scopé à une chorale (administrateur de tenant) voit donc
@@ -132,13 +187,15 @@ Apps : `core`, `authentication`, `membres`, `musique`, `presences`, `finances`,
 - Un `Membre` porte des `Mandat`s liés à des `Poste`s (M2M vers `Group` Django).
 - `Poste.unique_actif=True` : un seul mandat actif à la fois sur ce poste —
   en attribuer un nouveau doit clôturer le précédent (ex. un seul Président).
-- `membres/signals.py::synchroniser_groupes` recalcule `user.groups` à zéro :
-  groupes des mandats actifs + groupe de base selon `Membre.statut`. Déclenché
-  sur **`post_save` de `Mandat` ET de `Membre`** (création, changement de
-  statut, soft-delete/restore) — ne jamais assigner `user.groups` à la main.
+- Les rôles sont **résolus à la volée par tenant actif**
+  (`core/tenancy.py::roles_dans`) : groupes des mandats actifs du `Membre` de
+  la chorale ouverte + groupe de base selon `Membre.statut`. Plus aucun signal
+  n'écrit dans `user.groups` (`membres/signals.py` ne contient plus que
+  l'explication du retrait) — ne jamais rétablir cette écriture.
 - `Membre.soft_delete()` clôture les mandats actifs **avant** de sauvegarder le
-  membre (l'ordre compte : le recalcul des groupes doit voir l'état final,
-  sinon un membre restauré retrouve des permissions fantômes).
+  membre, et ne touche pas à `user.is_active`. Les mandats clos le restent :
+  une réadmission (`membres/services.py::adherer`) ne ressuscite aucune
+  permission fantôme, la propriété est portée par les données elles-mêmes.
 - `core/permissions.py` (`IsBureau`, `IsTresorier`, `IsMaitreChoeur`,
   `IsBureauOrMaitreChoeur`, `IsBureauOrTresorier`, `IsOwnerOrBureau`…) checke
   ces groupes. Seul l'**opérateur de plateforme** passe d'office (pas tout
@@ -152,9 +209,16 @@ Tester/accorder une permission = créer/activer un `Mandat`, jamais éditer
 JWT (`djangorestframework-simplejwt`), access token **30 minutes** (les rôles
 décodés côté front se rafraîchissent au prochain refresh silencieux après un
 changement de mandat). `CustomTokenObtainPairSerializer` embarque `groups`,
-`is_superuser`, `is_operateur`, `chorale_nom`, `chorale_currency`, `membre_id`…
-— décodés côté Angular (`AuthService`), pas d'appel `/me/`. Nouveau claim utile
-au front → l'ajouter aussi dans `DecodedToken` (frontend).
+`is_superuser`, `is_operateur`, `chorale_id`, `chorale_nom`, `chorale_currency`,
+`membre_id`, `chorales` (liste des appartenances, pour le sélecteur du jalon 4)
+et `chorales_suspendues` — décodés côté Angular (`AuthService`), pas d'appel
+`/me/`. Nouveau claim utile au front → l'ajouter aussi dans `DecodedToken`
+(frontend).
+
+**`groups` a changé de sens sans changer de nom** : il ne porte plus que les
+rôles du **tenant actif**. Le nom est conservé pour ne pas casser
+`AuthService.hasRole()` à ce jalon backend ; le renommage en `roles`
+accompagnera le jalon 4.
 
 Pas d'auto-inscription libre. Deux voies pour une **nouvelle chorale**, jamais
 automatiques (toujours une revue humaine) :
@@ -220,6 +284,12 @@ switch, petit choix exclusif → segmented, liste → select, plage → slider.
   masquage d'élément dans Angular.
 - Tests : `pytest -q` (backend) et `npm test` (frontend) doivent rester verts.
   Un nouveau comportement métier mérite un test de régression.
+- **Multi-tenant : une suite verte ne prouve rien à elle seule.** La quasi-
+  totalité des tests sont mono-chorale et restent verts même si la résolution
+  par tenant est fausse. Toute garantie de cloisonnement s'écrit dans
+  `core/tests/test_multi_appartenance.py` et se valide **par mutation** : rendre
+  la résolution globale doit rendre le test rouge (protocole et tableau des
+  quatre mutations de référence dans `chm-backend/README.md`).
 
 ## Pour aller plus loin
 
