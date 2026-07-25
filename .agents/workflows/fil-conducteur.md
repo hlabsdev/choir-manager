@@ -142,7 +142,19 @@ donnée de l'une n'apparaît dans l'autre.
 - les dépendances système de WeasyPrint ne sont pas provisionnées
   automatiquement ;
 - SMTP, stockage objet des médias, CI/CD, supervision et procédure d'incident
-  restent à traiter (jalon 5).
+  restent à traiter (jalon 5) ;
+- **test instable, à diagnostiquer avant tout trafic concurrent réel** —
+  [`chm-backend#1`](https://github.com/hlabsdev/chm-backend/issues/1) :
+  `presences/tests/test_pointage.py::test_double_soumission_simultanee_ne_cree_pas_de_doublon`
+  a échoué une fois sur trois runs complets avec un `401` intermittent sur l'un
+  de ses deux threads (pas le conflit de concurrence qu'il teste). Code
+  identique entre un run vert et un run rouge ; 3/3 en isolation, 5/5 au niveau
+  fichier ; préexistant au jalon 3 (introduit au jalon 2, commit `70dbc80`).
+  Hypothèse non confirmée : fuite d'un thread `daemon=True` d'un des 5 tests
+  `transaction=True` croisant le `TRUNCATE` du test suivant. Non bloquant pour
+  le jalon 4, mais ce test protège exactement le scénario — pointage mobile,
+  double-tap ou retry réseau — qui deviendra réel avec plusieurs chorales
+  actives simultanément.
 
 ## 7. Discipline Git
 

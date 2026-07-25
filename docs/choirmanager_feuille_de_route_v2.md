@@ -375,67 +375,156 @@ Inchangé sur le fond, avec l'ajout des notifications et du polling.
 
 ```
 Contexte : lis CLAUDE.md et chm-frontend/README.md. Le backend supporte
-désormais un User membre de plusieurs chorales, avec tenant actif dans le JWT et
-endpoint POST /api/auth/switch-chorale/. Session frontend uniquement.
+désormais un User membre de plusieurs chorales (tag v1.1.0-rc.1 + correctif
+admin mergé). Session FRONTEND uniquement. Backend non modifié dans cette
+session, sauf le renommage de claim décrit au point 0 qui se fait des DEUX
+côtés à la fois.
 
-PHASE 1 — ÉTAT DES LIEUX (ne code rien)
-Recense tout ce qui suppose une chorale unique : DecodedToken, AuthService,
-auth.guard.ts (roleGuard), le layout, NotificationsService, et tout composant
-lisant chorale_nom / membre_id / is_superuser. Présente-le, attends validation.
+CE QUE LE BACKEND EXPOSE DÉSORMAIS (pour cadrer ton audit, pas à re-découvrir)
+- JWT : claim tenant actif (chorale_id), liste des chorales du user
+  (id, nom, prefix, currency), claim opérateur (is_operateur, jalon 2), et un
+  claim rôles nommé `groups` mais dont le CONTENU est scopé au tenant actif
+  (plus l'union toutes chorales d'avant ce chantier).
+- Une session peut exister SANS tenant actif (chorale_id: null) : cas d'un user
+  qui n'a plus aucune chorale mais a une invitation nominative en attente. Le
+  dashboard répond alors 200 avec un objet vide construit explicitement (pas
+  d'erreur, pas de queryset qui se trouve vide par hasard) — le front doit
+  gérer cet état comme un état normal, pas comme une erreur.
+- POST /api/auth/switch-chorale/ {chorale_id} : vérifie l'appartenance côté
+  serveur, réémet un COUPLE access/refresh. L'ancien token n'ouvre plus le
+  nouveau tenant après coup — ce n'est pas un toggle local.
+- Onboarding déjà en place côté API : POST .../invitations/rejoindre-avec-mon-
+  compte/ (utilisateur déjà connecté qui ouvre un code) ; 409 explicite si
+  l'email saisi correspond à un compte existant (pas de création silencieuse) ;
+  modèle InvitationNominative avec GET .../mes-invitations/, POST .../accepter/,
+  POST .../refuser/ (initiative bureau, acceptation explicite obligatoire).
+- Notifications scopées au tenant actif en plus du destinataire.
+- Admin Django : god-mode réservé à l'opérateur (superuser sans aucun Membre),
+  un superuser membre d'une chorale n'a plus aucun privilège métier lié à
+  is_superuser — ça ne concerne pas directement ce front, mais ça cadre ce que
+  "opérateur" doit signifier dans l'UI Angular aussi.
 
-PHASE 2 — IMPLÉMENTATION
+PHASE 0 — renommage du claim (à faire en dernier dans cette session, pas en
+premier, une fois que tout le reste fonctionne sur `groups`)
+Le nom `groups` a été conservé au jalon 3 uniquement pour ne pas casser le
+front pendant la fenêtre entre les deux jalons. Cette raison disparaît
+maintenant. En fin de session, une fois tout validé : renomme le claim en
+`roles` des deux côtés (authentication/serializers.py côté backend,
+DecodedToken + tout lecteur côté front) dans un commit dédié et clairement
+identifié, après que le reste du jalon est testé et stable. Ne le fais pas en
+ouverture de session — tu perdrais ton signal de référence pendant le
+développement du reste.
+
+PHASE 1 — ÉTAT DES LIEUX (ne code rien, présente et attends validation)
+Recense et présente :
+1. Tout ce qui suppose une chorale unique : DecodedToken, AuthService,
+   auth.guard.ts (roleGuard), le layout, NotificationsService, et tout
+   composant lisant chorale_nom / membre_id / is_superuser directement plutôt
+   que via un service centralisé.
+2. Tous les endroits qui lisent `is_superuser` pour afficher un élément d'UI
+   (dette du jalon 2, ~25 sites dont hasRole()) — cette session est l'occasion
+   de les corriger en les faisant lire `is_operateur` à la place, PAS
+   is_superuser. Confirme la liste avant de toucher au code.
+3. Le comportement actuel du front face à un dashboard vide / une session sans
+   tenant : plante-t-il, ou gère-t-il déjà un état "aucune donnée" ? Ça
+   détermine si la gestion du cas chorale_id: null est un ajout ou une
+   correction.
+Présente ce recensement. Attends ma validation.
+
+PHASE 2 — IMPLÉMENTATION (après validation)
 
 Types & état
-- DecodedToken : tenant actif, liste des chorales, claim opérateur (jalon 2).
-- AuthService : chorale active et liste disponible exposées en signals.
-- roleGuard : les rôles lus sont ceux du TENANT ACTIF. Vérifie qu'aucun guard ne
-  raisonne encore sur des rôles globaux.
+- DecodedToken : tenant actif (chorale_id, nom, prefix, currency), liste des
+  chorales du user, claim is_operateur. Corrige toute lecture de is_superuser
+  qui décidait d'un affichage — elle doit lire is_operateur.
+- AuthService : expose en signals la chorale active, la liste des chorales
+  disponibles, et le statut opérateur.
+- roleGuard : les rôles lus sont ceux du TENANT ACTIF uniquement (le claim
+  `groups`/`roles` est déjà scopé côté backend — le guard n'a rien à filtrer
+  lui-même, juste à ne jamais mélanger avec un état d'un autre tenant en cache).
 
 Sélecteur de chorale
-- En haut du layout authentifié, près de l'identité utilisateur. Visible aussi
-  sur mobile.
-- Si une seule chorale : PAS de sélecteur, juste le nom. Ne pas encombrer
-  l'interface pour le cas majoritaire.
-- Au changement : switch-chorale → remplacer les tokens → PUIS réinitialiser
-  l'état applicatif (caches, listes chargées, compteur de notifications non lues,
-  route courante). Risque à éviter absolument : afficher les données de la
-  chorale précédente sous le nom de la nouvelle.
-- Si la route courante n'a plus de sens dans le nouveau tenant, ou si le rôle
-  n'y donne plus accès : rediriger vers le dashboard, pas vers /acces-reserve.
-- États obligatoires pendant le switch : chargement, et en cas d'échec message +
-  retour à l'état précédent (pas d'état intermédiaire figé).
+- Emplacement : haut du layout authentifié, près de l'identité utilisateur,
+  visible sur mobile.
+- Si une seule chorale : PAS de sélecteur, juste le nom affiché. Ne pas
+  encombrer l'interface pour le cas majoritaire (c'est celui de la quasi-
+  totalité des utilisateurs réels aujourd'hui).
+- Si aucune chorale active (chorale_id: null) : pas de sélecteur non plus,
+  mais un état clair — par exemple un bandeau "Vous n'êtes membre d'aucune
+  chorale actuellement" avec accès direct aux invitations en attente s'il y en
+  a (cf. onboarding ci-dessous).
+- Au changement : appelle switch-chorale → remplace access+refresh → PUIS
+  réinitialise l'état applicatif dans cet ordre précis : caches de données
+  chargées, compteur et liste de notifications, route courante. RISQUE À
+  ÉVITER ABSOLUMENT : afficher un instant les données de l'ancienne chorale
+  sous le nom de la nouvelle — un signal qui ne se vide pas avant le rechargement
+  produit exactement ça.
+- Si la route courante n'a plus de sens dans le nouveau tenant (le rôle n'y
+  donne plus accès, ou la ressource affichée appartenait à l'ancien tenant) :
+  redirige vers le dashboard. Ne redirige PAS vers /acces-reserve — ce n'est
+  pas un refus de droit, c'est un changement de contexte.
+- États obligatoires pendant le switch : indicateur de chargement sur le
+  sélecteur lui-même (pas un skeleton pleine page), et en cas d'échec réseau :
+  message clair + retour à l'état précédent (chorale active inchangée), jamais
+  un état intermédiaire où le sélecteur affiche une chorale que les tokens ne
+  confirment pas encore.
 
 Notifications
-- Le compteur nonLues et la liste doivent être remis à zéro puis rechargés au
-  switch de chorale.
+- Compteur non-lues et liste : remis à zéro puis rechargés au switch de
+  chorale, jamais laissés affichant un total de l'ancien tenant.
 - Le polling 60s doit s'interrompre quand l'onglet est en arrière-plan
-  (document.hidden / Page Visibility API). Sinon c'est une charge serveur
-  constante et inutile, et cela disqualifie tout hébergement à quota d'heures.
+  (Page Visibility API, document.hidden). C'était déjà une dette signalée —
+  si elle n'a jamais été traitée, corrige-la maintenant.
 
 Mode opérateur (god-mode)
-- Si le claim opérateur est présent : sélecteur permettant de consulter n'importe
-  quelle chorale + entrée de menu « Gestion des chorales ».
+- Si is_operateur est vrai : afficher un sélecteur permettant de consulter
+  n'importe quelle chorale (liste complète, pas seulement les siennes — un
+  opérateur n'a par définition aucun Membre) + une entrée de menu "Gestion des
+  chorales".
 - STRICTEMENT invisible pour tout autre profil, y compris un superuser membre
-  d'une chorale (cf. jalon 2).
-- Rappel : masquer dans l'UI ne suffit jamais, le backend refuse déjà. Les deux.
+  d'une chorale. Rappel de convention : masquer dans l'UI ne suffit jamais, le
+  backend refuse déjà côté admin Django — ici c'est la même logique appliquée
+  à l'app Angular.
+- Si "Gestion des chorales" n'a pas d'écran dédié côté API pour l'instant,
+  ne construis pas de CRUD complet dans cette session : un lien vers l'admin
+  Django (déjà fonctionnel et cloisonné) est un point d'arrivée acceptable
+  pour ce jalon. Dis-moi si tu vois un écart.
 
-Onboarding
-- Sur /rejoindre/:code, si la personne est déjà connectée : écran de confirmation
-  « Rejoindre <Chorale> avec votre compte actuel ? » plutôt que le formulaire
-  d'inscription. Si l'email saisi correspond à un compte existant : proposer la
-  connexion plutôt que la création d'un doublon.
-- Invitation nominative en attente : l'exposer à l'utilisateur connecté avec
-  accepter / refuser.
+Onboarding — deux flux à câbler sur l'API déjà existante
+- /rejoindre/:code : si la personne est déjà connectée, appelle
+  rejoindre-avec-mon-compte/ directement (écran de confirmation "Rejoindre
+  <Chorale> avec votre compte actuel ?"), PAS le formulaire d'inscription.
+- Sur ce même écran, si la soumission d'un email (utilisateur non connecté)
+  reçoit le 409 du backend : affiche clairement "Un compte existe déjà avec
+  cet email — connectez-vous pour accepter l'invitation" avec un lien de
+  connexion qui ramène ensuite sur le même code. Ne laisse jamais cet état se
+  présenter comme une erreur générique.
+- Nouvel écran (ou section de mon-espace) : liste des invitations nominatives
+  en attente, via GET .../mes-invitations/, avec actions Accepter / Refuser.
+  Si l'utilisateur n'a aucune chorale active, c'est l'écran qu'il doit voir en
+  priorité après connexion plutôt qu'un dashboard vide muet.
 
 TESTS (Vitest)
-- roleGuard : un rôle élevé dans une AUTRE chorale que l'active ne passe pas.
-- Le sélecteur n'apparaît pas quand il n'y a qu'une chorale.
-- Les entrées opérateur sont absentes du DOM pour un non-opérateur.
-- Le compteur de notifications est réinitialisé au switch.
+- roleGuard : un rôle élevé venant d'un autre tenant que l'actif ne doit
+  jamais passer (le claim étant déjà scopé côté backend, ce test protège
+  surtout contre un bug de cache front qui mélangerait deux états).
+- Le sélecteur de chorale n'apparaît pas quand il n'y a qu'une chorale.
+- Les entrées opérateur (sélecteur toutes-chorales, "Gestion des chorales")
+  sont absentes du DOM pour un utilisateur non-opérateur, y compris superuser
+  membre d'une chorale.
+- Le compteur de notifications est réinitialisé au switch de chorale.
+- Un dashboard "vide" (chorale_id: null) affiche l'état dédié, pas une erreur.
+- Le renommage groups → roles (phase 0) : un test qui décode le token et lit
+  le nouveau nom, pour qu'une régression de nommage soit détectée immédiatement.
 
-Contraintes : signals uniquement, control-flow @if/@for, classes du design system
-existant, icônes enregistrées dans app.config.ts. build + test verts.
-Ne commit pas — je teste le switch manuellement avant merge.
+Contraintes : signals uniquement (.update(), pas de mutation), control-flow
+@if/@for, classes du design system existant (.card, .btn-*, .badge-*, ne
+recompose pas d'utilitaires Tailwind à la main), icônes enregistrées dans
+app.config.ts. npm run build + npm test verts avant de me rendre la main.
+
+Ne commit pas — je teste le switch de chorale, l'onboarding compte-existant,
+et le mode opérateur manuellement avant merge, avec le compte à deux chorales
+déjà créé lors des tests du jalon précédent.
 ```
 
 ---
