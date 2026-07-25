@@ -143,18 +143,23 @@ donnée de l'une n'apparaît dans l'autre.
   automatiquement ;
 - SMTP, stockage objet des médias, CI/CD, supervision et procédure d'incident
   restent à traiter (jalon 5) ;
-- **test instable, à diagnostiquer avant tout trafic concurrent réel** —
-  [`chm-backend#1`](https://github.com/hlabsdev/chm-backend/issues/1) :
+- **401 intermittent sur requêtes authentifiées, en suite complète — pas confiné
+  à un seul test** — [`chm-backend#1`](https://github.com/hlabsdev/chm-backend/issues/1) :
   `presences/tests/test_pointage.py::test_double_soumission_simultanee_ne_cree_pas_de_doublon`
-  a échoué une fois sur trois runs complets avec un `401` intermittent sur l'un
-  de ses deux threads (pas le conflit de concurrence qu'il teste). Code
-  identique entre un run vert et un run rouge ; 3/3 en isolation, 5/5 au niveau
-  fichier ; préexistant au jalon 3 (introduit au jalon 2, commit `70dbc80`).
-  Hypothèse non confirmée : fuite d'un thread `daemon=True` d'un des 5 tests
-  `transaction=True` croisant le `TRUNCATE` du test suivant. Non bloquant pour
-  le jalon 4, mais ce test protège exactement le scénario — pointage mobile,
-  double-tap ou retry réseau — qui deviendra réel avec plusieurs chorales
-  actives simultanément.
+  (threadé) ET `core/tests/test_api_integration.py::TestFinances::test_generer_puis_payer_cotisation`
+  (séquentiel, sans thread) ont chacun montré un `401` inattendu sur une
+  requête authentifiée censée réussir — jamais le défaut que le test vérifie
+  lui-même. Les deux passent systématiquement en isolation stricte ; le second
+  échoue 2 fois sur 3 en invocations répétées rapprochées du même fichier, ce
+  qui exclut un problème d'ordre pur (aucun `pytest-randomly` installé, ordre
+  déterministe) et pointe vers quelque chose de temporel — possiblement une
+  contention entre conteneurs de test consécutifs (chaque run recrée
+  `test_choirmanager`), possiblement une fuite de thread `daemon=True` pour le
+  premier. Aucune cause confirmée par instrumentation. Préexistant au jalon 3
+  pour le premier test (introduit au jalon 2, commit `70dbc80`) ; le second n'a
+  pas été vérifié sur une révision antérieure au jalon 3. Non bloquant pour le
+  jalon 4, mais à instrumenter avant tout trafic concurrent réel — le symptôme
+  touche l'authentification elle-même, pas un mécanisme isolé.
 
 ## 7. Discipline Git
 
