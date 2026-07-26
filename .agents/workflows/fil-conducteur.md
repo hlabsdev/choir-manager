@@ -16,13 +16,13 @@ vérifié et documenté.
 
 | Élément | Valeur |
 | --- | --- |
-| Date du constat | 25 juillet 2026 |
-| Stade produit | MVP fonctionnel, multi-chorale backend |
+| Date du constat | 26 juillet 2026 |
+| Stade produit | MVP fonctionnel, multi-chorale backend **et** frontend |
 | Dernier jalon livré | Jalon 3 — passage 1:N backend (`v1.1.0-rc.1`) |
-| Prochain jalon | Jalon 4 — passage 1:N frontend (`v1.1.0-rc.2`) |
+| Jalon en cours | Jalon 4 — passage 1:N frontend : **implémenté, validation manuelle en attente** (non tagué) |
 | Base de données | PostgreSQL 17 sous Docker Compose |
-| Tests backend | 217 (`pytest -q`) |
-| Tests frontend | 32 (Vitest) |
+| Tests backend | 237 (`pytest -q`) |
+| Tests frontend | 69 (Vitest) |
 | Feuille de route détaillée | `docs/choirmanager_feuille_de_route_v2.md` |
 | Runbook d'exploitation | `docs/DEPLOIEMENT.md` |
 
@@ -43,7 +43,7 @@ En cas de contradiction, appliquer cet ordre :
 | 1 | Docker + PostgreSQL | `v1.0.0-mvp.2` | livré |
 | 2 | Cloisonnement opérateur / administrateur de tenant | `v1.0.0-mvp.3` | livré |
 | 3 | Passage 1:N — backend | `v1.1.0-rc.1` | livré |
-| 4 | Passage 1:N — frontend | `v1.1.0-rc.2` | **à engager** |
+| 4 | Passage 1:N — frontend | `v1.1.0-rc.2` | implémenté, **non validé manuellement** |
 | 5 | Déploiement + sauvegardes testées | — | à venir |
 | 6 | Pilote réel 4–6 semaines, une seule chorale | `v1.1.0` | à venir |
 
@@ -100,7 +100,7 @@ appartenance à plusieurs chorales, changement de chorale, et rôles scopés.
   exploitables ;
 - claim `chorales_suspendues` : `[{id, nom}]` — pour expliquer une session sans
   tenant plutôt qu'un écran vide ;
-- claim `chorale_id` : le tenant actif ; `membre_id` et `groups` en découlent ;
+- claim `chorale_id` : le tenant actif ; `membre_id` et `roles` en découlent ;
 - `POST /api/auth/switch-chorale/ {chorale_id}` → nouveau couple
   access/refresh ;
 - `GET /api/membres/mes-invitations/` + `accepter/` / `refuser/` — accessibles
@@ -109,27 +109,44 @@ appartenance à plusieurs chorales, changement de chorale, et rôles scopés.
 
 ### Travaux
 
-- [ ] Sélecteur de chorale dans `main-layout` (lecture du claim `chorales`),
-  appel de `switch-chorale`, remplacement des deux tokens, rechargement de
-  l'état applicatif.
-- [ ] État « session sans tenant » : écran dédié listant les invitations en
-  attente et le motif (chorale suspendue via `chorales_suspendues`), au lieu
-  d'un dashboard vide inexpliqué.
-- [ ] Acceptation / refus d'une invitation nominative.
-- [ ] Adhésion à une chorale supplémentaire par code, depuis un compte connecté.
-- [ ] **Dette du jalon 2** : basculer les ~25 lectures de `is_superuser` sur
-  `is_operateur` (déjà dans `DecodedToken`), dont `AuthService.hasRole()` qui
-  renvoie `true` pour tout superuser — un administrateur de tenant voit
-  aujourd'hui une UI « god-mode » que le backend refuse déjà.
-- [ ] Renommer le claim `groups` en `roles` **des deux côtés à la fois**. Le nom
-  a été volontairement conservé au jalon 3 (contenu scopé au tenant actif) pour
-  que le front continue de fonctionner sans modification ; le renommer seul
-  casserait `hasRole()`.
-- [ ] Tests Vitest sur le switch et sur l'état sans tenant.
+- [x] Sélecteur de chorale dans `main-layout` (masqué à une seule chorale),
+  appel de `switch-chorale`, remplacement des deux tokens, purge de l'état.
+- [x] État « session sans tenant » : bandeau nommant le motif (chorale suspendue
+  via `chorales_suspendues`), écran `/mes-invitations` comme page d'arrivée,
+  état dédié sur le dashboard.
+- [x] Acceptation / refus d'une invitation nominative.
+- [x] Adhésion à une chorale supplémentaire par code, depuis un compte connecté.
+- [x] **Dette du jalon 2 soldée** : `AuthService.isSuperuser` est supprimé, pas
+  rebranché. Les 17 sites de permission métier perdent leur clause superuser
+  sans contrepartie — les droits viennent des mandats. `is_operateur` ne pilote
+  que la surface plateforme ; `roleGuard` perd sa dérogation et les routes
+  opérateur passent par `operateurGuard`.
+- [x] Claim `groups` renommé `roles` des deux côtés (`cff1d69`).
+- [x] Tests Vitest : 32 → 69, garanties centrales validées par mutation.
+
+### Reste à faire avant de taguer `v1.1.0-rc.2`
+
+- [ ] **Validation manuelle** : switch de chorale depuis `/dashboard` (le cas
+  `routeReuseStrategy`), onboarding compte-existant, écran sans-tenant, mode
+  opérateur — avec un compte réellement membre de deux chorales.
+- [ ] Point non couvert par les tests : `switch-chorale` réémet aussi le
+  *refresh* token. Un refresh silencieux concurrent de la bascule est le seul
+  scénario de course non simulé.
 
 **Critère de sortie :** une personne membre de deux chorales bascule de l'une à
 l'autre dans l'interface, voit des rôles différents dans chacune, et aucune
 donnée de l'une n'apparaît dans l'autre.
+
+### Point d'architecture acté
+
+Les TROIS endpoints qui réémettent un couple de tokens (`switch-chorale/`,
+`invitations/rejoindre-avec-mon-compte/`, `mes-invitations/{id}/accepter/`)
+changent de tenant et passent tous par
+`TenantContextService.appliquerContexteTenant()` — jamais par
+`AuthService.appliquerTokens()` en direct. Tout nouvel endpoint réémettant des
+tokens doit rejoindre ce chemin : trois implémentations parallèles, c'est trois
+occasions d'afficher les données de l'ancienne chorale sous le nom de la
+nouvelle.
 
 ## 6. Décisions arrêtées (ne pas re-proposer)
 
@@ -143,7 +160,12 @@ donnée de l'une n'apparaît dans l'autre.
 
 ## 7. Limites et dette connues
 
-- le frontend lit encore `is_superuser` (cf. jalon 4 ci-dessus) ;
+- **pas de sélecteur toutes-chorales pour l'opérateur** : l'API n'expose aucun
+  endpoint Chorale, et `switch-chorale` ne peut émettre un token que pour une
+  chorale dont le compte est membre — un opérateur n'en a aucune par définition.
+  « Gestion des chorales » pointe donc vers l'admin Django, déjà cloisonné côté
+  serveur. Ouvrir une vraie consultation inter-tenants serait une décision de
+  sécurité (usurpation de tenant), pas un écran de plus ;
 - l'admin Django ne propose pas de sélecteur de tenant : un administrateur
   rattaché à plusieurs chorales n'y voit rien (choix assumé — l'admin est un
   outil d'exploitation opérateur, pas un second front métier) ;

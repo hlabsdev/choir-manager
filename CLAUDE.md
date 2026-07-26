@@ -11,7 +11,7 @@ rapports. API Django REST + frontend Angular 21.
 **État** : jalon PostgreSQL/Docker figé au tag `v1.0.0-mvp.2`. La ligne de
 développement active est `main` ; `release/mvp-v1` (historique) et
 `release/mvp-v2` (stabilisation courante) sont des lignes de release, taguées
-au besoin. Backend et frontend passent respectivement ~217 et ~32 tests.
+au besoin. Backend et frontend passent respectivement ~237 et ~69 tests.
 PostgreSQL 17 sous Docker Compose (`compose.yaml` prod-like, `compose.dev.yaml`
 pour l'itération) — voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
@@ -45,7 +45,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~217 tests)
+pytest -q                           # suite complète (~237 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
@@ -62,7 +62,7 @@ dev), `WEASYPRINT_DLL_DIR` (GTK sous Windows, pour l'export PDF).
 npm run start        # tailwind build (une fois) + ng serve, http://localhost:4200
 npm run start:dev    # tailwind --watch en tâche de fond + ng serve
 npm run build        # tailwind build + ng build
-npm test             # Vitest (~32 tests)
+npm test             # Vitest (~69 tests)
 ```
 Tailwind v4 n'est **pas** branché sur le pipeline esbuild d'Angular — il est
 compilé explicitement via son CLI avant chaque serve/build. Si les styles
@@ -141,8 +141,9 @@ mandats clos.
 
 `core/tenancy.py` est la **source unique de vérité** : ne jamais tester
 `is_superuser` directement pour élargir un accès.
-- **Opérateur de plateforme** = superuser SANS aucun `Membre` → `request.chorale
-  = None`, accès global, gère les chorales (`est_operateur(user)` renvoie True).
+- **Opérateur de plateforme** = superuser SANS aucun `Membre` →
+  `chorale_active(request)` renvoie `None`, accès global, gère les chorales
+  (`est_operateur(user)` renvoie True).
 - **Superuser AVEC un `Membre`** = administrateur de tenant : scopé à sa chorale
   exactement comme un membre normal. `is_superuser` **ne confère aucun droit
   métier** — ses permissions viennent uniquement de ses `Mandat`s. Un fondateur
@@ -169,14 +170,20 @@ l'admin s'authentifie par session, sans claim de tenant, et y inventer un
 tenant de session ouvrirait une troisième source de vérité. L'admin est un
 outil d'exploitation opérateur, pas un second front métier.
 
-**Dette front connue** : le frontend lit encore `is_superuser` à ~25 endroits
-(dont `AuthService.hasRole()`, qui renvoie `true` pour tout superuser). Un
-superuser scopé à une chorale (administrateur de tenant) voit donc
-aujourd'hui une UI « god-mode » alors que le backend refuse déjà ces actions
-côté API. Correction prévue au prochain jalon frontend : basculer ces
-lectures sur `is_operateur` (déjà présent dans `DecodedToken`). Volontairement
-non traité pendant le jalon de cloisonnement backend (aucun composant Angular
-touché sur cette session).
+**Côté front, la dette « god-mode » est soldée** (jalon 4) : `AuthService`
+n'expose plus du tout `isSuperuser` — supprimé, pas rebranché sur
+`is_operateur`, car tant qu'il existait il restait disponible comme critère
+d'affichage. Les permissions métier ne lisent QUE `roles` (mandats du tenant
+actif) ; `isOperateur` ne pilote que la surface plateforme (libellé d'identité,
+« Gestion des chorales »), jamais un droit métier — un opérateur n'a aucun
+mandat, nulle part. Le claim `is_superuser` reste dans `DecodedToken` parce que
+le backend l'émet, mais **aucun code front ne le lit** : le rétablir comme
+critère d'affichage recréerait exactement la dette.
+
+Deux natures d'accès, deux mécanismes : `roleGuard` (mandats) n'accorde aucune
+dérogation à l'opérateur, et les routes opérateur passent par `operateurGuard`.
+Même séparation que côté serveur entre `est_operateur` et la résolution par
+mandats.
 
 ### RBAC : le pivot est `Mandat`, jamais un rôle fixe
 
@@ -208,17 +215,21 @@ Tester/accorder une permission = créer/activer un `Mandat`, jamais éditer
 
 JWT (`djangorestframework-simplejwt`), access token **30 minutes** (les rôles
 décodés côté front se rafraîchissent au prochain refresh silencieux après un
-changement de mandat). `CustomTokenObtainPairSerializer` embarque `groups`,
+changement de mandat). `CustomTokenObtainPairSerializer` embarque `roles`,
 `is_superuser`, `is_operateur`, `chorale_id`, `chorale_nom`, `chorale_currency`,
-`membre_id`, `chorales` (liste des appartenances, pour le sélecteur du jalon 4)
+`membre_id`, `chorales` (liste des appartenances, pour le sélecteur de chorale)
 et `chorales_suspendues` — décodés côté Angular (`AuthService`), pas d'appel
 `/me/`. Nouveau claim utile au front → l'ajouter aussi dans `DecodedToken`
 (frontend).
 
-**`groups` a changé de sens sans changer de nom** : il ne porte plus que les
-rôles du **tenant actif**. Le nom est conservé pour ne pas casser
-`AuthService.hasRole()` à ce jalon backend ; le renommage en `roles`
-accompagnera le jalon 4.
+**Le claim de rôles s'appelle `roles`**, et ne porte que les rôles du **tenant
+actif**. Il s'appelait `groups`, par héritage de `user.groups` — une table
+désormais vide et qui n'est plus source de vérité ; le nom suggérait donc un
+état global au compte alors que le contenu est scopé à UNE chorale. Renommé des
+deux côtés au jalon 4. Attention en y touchant : un renommage fait d'un seul
+côté ne lève aucune erreur au runtime, il vide silencieusement tous les rôles
+et dégrade chaque écran en vue « choriste » —
+`chm-frontend/src/app/core/auth/auth.service.spec.ts` verrouille le nom.
 
 Pas d'auto-inscription libre. Deux voies pour une **nouvelle chorale**, jamais
 automatiques (toujours une revue humaine) :
@@ -247,17 +258,39 @@ faire échouer l'action métier qui les déclenche.
 Standalone components + Signals uniquement (pas de NgModules, pas de
 `zone.js`). Sous `src/app/` :
 - `core/auth/` — `AuthService` (état par signals, décodage JWT,
-  login/logout/`changerMotDePasse`), `auth.interceptor.ts` (bearer + refresh
-  mutualisé sur 401), `auth.guard.ts` (`authGuard`, `roleGuard([...])` →
-  redirige vers `/acces-reserve`, une page contextuelle plutôt qu'un refus brut).
+  login/logout/`changerMotDePasse`, `roles`/`isOperateur`/`choraleActive`/
+  `chorales`/`aUnTenant`), `auth.interceptor.ts` (bearer + refresh mutualisé sur
+  401), `auth.guard.ts` (`authGuard`, `roleGuard([...])` → redirige vers
+  `/acces-reserve`, une page contextuelle plutôt qu'un refus brut, et
+  `operateurGuard` pour les routes de plateforme).
+- `core/tenant/` — `TenantContextService` : **chemin unique** des changements de
+  chorale (voir ci-dessous). Rien d'autre ne doit remplacer les tokens.
 - `features/<domaine>/` — un dossier par domaine (membres, musique, presences,
   finances, communications, rapports, notifications, profil, dashboard,
   structure), chacun avec ses routes lazy-loadées et un `services/`.
 - `features/auth/` — en plus du login : `demande-chorale/` et `rejoindre/`
-  (routes publiques, hors guard).
+  (routes publiques, hors guard) et `mes-invitations/` (authentifiée, ouverte
+  **sans tenant actif** — c'est la seule issue d'une session sans chorale).
+- `features/operateur/` — `gestion-chorales`, réservée à `operateurGuard`.
 - `layout/main-layout/` — coquille des routes authentifiées, sidebar réductible
   en rail d'icônes (auto sous 1280px, préférence mémorisée au-delà), badge de
-  notifications non lues.
+  notifications non lues, bandeau « sans chorale ».
+- `layout/chorale-selector/` — bascule de tenant. **Masqué à une seule chorale**
+  (cas de la quasi-totalité des comptes réels) : le nom seul est affiché.
+
+**Changer de chorale passe par `TenantContextService`, jamais autrement.** Trois
+endpoints réémettent un couple access/refresh et changent donc de tenant :
+`switch-chorale/`, `invitations/rejoindre-avec-mon-compte/` et
+`mes-invitations/{id}/accepter/`. Tous appellent
+`appliquerContexteTenant()` — jamais `AuthService.appliquerTokens()` en direct.
+Ordre non interchangeable : tokens, puis purge de l'état applicatif, puis
+renavigation. Purger après avoir navigué laisserait le nouvel écran se peupler
+depuis des signaux encore chargés de l'ancien tenant, et l'utilisateur verrait
+un instant les données de l'ancienne chorale sous le nom de la nouvelle. La
+renavigation neutralise temporairement la réutilisation de route : sans cela,
+basculer depuis `/dashboard` réutiliserait l'instance en place. Tout futur store
+partagé (`providedIn: 'root'` conservant des données de chorale) doit être purgé
+dans `purgerEtatApplicatif()`.
 - URLs API centralisées dans `src/environments/environment.ts` — jamais d'URL
   backend en dur dans un composant/service.
 - Icônes `lucide-angular` — importer dans `app.config.ts` et ajouter au
