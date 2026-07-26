@@ -182,13 +182,32 @@ le garde-fou placé dans le service et non dans la vue. Neuf tests, dont le test
 central validé par mutation.
 
 Ce qui manque n'est pas la logique, c'est **le processus** : aucune revue n'a
-cherché ce que ce raisonnement pourrait avoir manqué. Points restés non
-instruits, à examiner explicitement :
+cherché ce que ce raisonnement pourrait avoir manqué.
+
+#### Prérequis ordonné — révoquer les sessions AVANT le reset par email
+
+**Décision de cadrage : l'invalidation des JWT au changement de mot de passe se
+traite AVANT le reset par email, pas en même temps.**
+
+Aujourd'hui, changer un mot de passe ne révoque rien : les access et refresh
+tokens déjà émis restent valides jusqu'à expiration, soit **7 jours** pour le
+refresh. C'est une fausse promesse de sécurité — quelqu'un qui soupçonne une
+compromission change son mot de passe en croyant fermer la porte, et l'attaquant
+conserve l'accès une semaine.
+
+Le reset par email **augmentera** cette surface : un lien envoyé par email peut
+être intercepté ou rejoué. On ne construit pas ce flux au-dessus d'un mécanisme
+qui ne révoque pas les sessions existantes.
+
+Même logique d'ordonnancement que PostgreSQL avant la refonte 1:N : on ne pose
+pas la couche suivante sur un socle dont on sait déjà qu'il devra être repris.
+
+#### Autres points non instruits
+
+À examiner dans la revue, sans ordre imposé entre eux :
 
 - pas de limitation de débit sur l'endpoint — un Bureau compromis peut
   réinitialiser en boucle ;
-- aucune invalidation des sessions/tokens existants de la personne : ses JWT
-  restent valides jusqu'à expiration après changement du mot de passe ;
 - aucune journalisation côté serveur, seulement une notification in-app au
   destinataire (aucune trace côté Bureau ni côté exploitant) ;
 - pas d'obligation de changer le mot de passe temporaire à la première
@@ -256,6 +275,34 @@ Périmètre à cadrer.
   touche l'authentification elle-même, pas un mécanisme isolé.
 
 ## 9. Discipline Git
+
+### Modèle de branches — une seule ligne de release
+
+Trois branches vivantes, dans les trois dépôts :
+
+| Branche | Rôle |
+| --- | --- |
+| `main` | ligne de développement **à jour** ; c'est la référence de travail |
+| `release/mvp-v1` | **unique** ligne de release ; les tags s'y incrémentent |
+| `feat/<sujet>` | branches de fonctionnalité, fusionnées dans `main` puis supprimées |
+
+Il n'existe **qu'une** ligne de release, malgré son nom historique
+« mvp-v1 » : tous les jalons successifs y sont portés, et un tag annoté y est
+posé à chaque fois (`v1.0.0-mvp.1` → `v1.0.0-mvp.2` → `v1.0.0-mvp.3` →
+`v1.1.0-rc.1` → `v1.1.0-rc.2`). Ne pas ouvrir de seconde ligne de release : le
+modèle réel n'en a pas besoin, et une ligne supplémentaire non alimentée
+finirait par décrire un état qui n'existe nulle part.
+
+À la clôture d'un jalon : `main` et `release/mvp-v1` convergent sur le même
+commit, et le tag annoté y est posé. `main` ne doit jamais rester en retard sur
+la ligne de release, sous peine de faire mentir la présente description.
+
+**Les tags vivent sur le superprojet uniquement.** Les sous-modules n'en portent
+aucun : le commit du superprojet fige déjà leurs pointeurs, donc un tag racine
+suffit à reconstituer l'état complet (`git checkout <tag> && git submodule
+update --init --recursive`).
+
+### Sous-modules
 
 Le dépôt racine est un **superprojet** ; `chm-backend/` et `chm-frontend/` sont
 des sous-modules avec leur propre remote et leur propre historique.

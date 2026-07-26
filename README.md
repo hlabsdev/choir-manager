@@ -32,9 +32,11 @@ Git.
 | Superprojet | `https://github.com/hlabsdev/choir-manager.git` |
 | Backend | `https://github.com/hlabsdev/chm-backend.git` |
 | Frontend | `https://github.com/hlabsdev/chm-frontend.git` |
-| Jalon de référence | branche `release/mvp-v1`, tag annoté `v1.0.0-mvp.1` |
-| Backend figé par le jalon | `77869d6` |
-| Frontend figé par le jalon | `9abe5ad` |
+| Ligne de développement | `main` (à jour) |
+| Ligne de release | `release/mvp-v1` — **unique**, les tags s'y incrémentent |
+| Dernier jalon | tag annoté `v1.1.0-rc.2` (multi-chorale frontend) |
+| Backend figé par le jalon | `a41ddb8` |
+| Frontend figé par le jalon | `07c9e94` |
 
 Le périmètre du jalon est décrit dans [RELEASE_NOTES.md](RELEASE_NOTES.md). Le
 travail à venir et ses critères de sortie sont centralisés dans
@@ -433,11 +435,15 @@ stockage persistant, CI et recette E2E, constitue le prochain jalon. Son ordre
 d'exécution et ses critères d'acceptation sont définis dans le
 [fil conducteur actif](.agents/workflows/fil-conducteur.md).
 
-La migration PostgreSQL et la préparation Docker font désormais partie de la
-stabilisation du MVP actuel. Elles ne sont pas encore implémentées. Elles seront
-développées sur des branches de fonctionnalité, validées sous PostgreSQL, puis
-intégrées à la ligne `release/mvp-v1` avec un nouveau tag sans modifier
-`v1.0.0-mvp.1`.
+La migration PostgreSQL et la préparation Docker sont **livrées** (jalon 1,
+`v1.0.0-mvp.2`), comme le cloisonnement opérateur/tenant (jalon 2) et le passage
+multi-chorale backend puis frontend (jalons 3 et 4, `v1.1.0-rc.2`).
+
+Le modèle de livraison reste le même : développement sur une branche de
+fonctionnalité, fusion dans `main` une fois validée, puis convergence de
+`release/mvp-v1` sur le même commit et pose d'un tag annoté. Les tags
+s'incrémentent sur cette unique ligne de release ; les précédents ne sont jamais
+modifiés.
 
 ## Hors périmètre du MVP
 

@@ -1,5 +1,10 @@
 # Plan d'exécution — WSL, Docker et migration PostgreSQL
 
+> **Document historique — plan LIVRÉ (jalon 1, tag `v1.0.0-mvp.2`).** Conservé
+> pour la traçabilité des décisions ; l'état courant vit dans
+> [.agents/workflows/fil-conducteur.md](../.agents/workflows/fil-conducteur.md).
+> Le runbook d'exploitation à jour est [DEPLOIEMENT.md](DEPLOIEMENT.md).
+
 > Statut : instructions préparatoires uniquement
 >
 > Date : 24 juillet 2026

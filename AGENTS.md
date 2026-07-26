@@ -8,10 +8,12 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : MVP fonctionnel figé au tag `v1.0.0-mvp.1` (branche `release/mvp-v1`).
-Backend et frontend passent respectivement ~129 et ~32 tests. SQLite + environnement
-de dev unique — pas encore prêt pour la production (migration PostgreSQL/Docker à
-venir, voir [.agents/workflows/fil-conducteur.md](.agents/workflows/fil-conducteur.md)).
+**État** : jalon 4 (multi-chorale frontend) figé au tag `v1.1.0-rc.2`. Backend et
+frontend passent respectivement ~246 et ~77 tests. PostgreSQL 17 sous Docker
+Compose. `main` est la ligne de développement à jour ; `release/mvp-v1` est
+l'unique ligne de release, sur laquelle les tags s'incrémentent. Pas encore prêt
+pour la production — déploiement, sauvegardes testées et CI/CD constituent le
+jalon 5, voir [.agents/workflows/fil-conducteur.md](.agents/workflows/fil-conducteur.md).
 
 - **Code** (variables, classes, champs DB) : anglais.
 - **UI, logs, commentaires métier** : français — volontaire et cohérent dans

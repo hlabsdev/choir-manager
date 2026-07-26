@@ -8,12 +8,17 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : jalon PostgreSQL/Docker figé au tag `v1.0.0-mvp.2`. La ligne de
-développement active est `main` ; `release/mvp-v1` (historique) et
-`release/mvp-v2` (stabilisation courante) sont des lignes de release, taguées
-au besoin. Backend et frontend passent respectivement ~246 et ~77 tests.
-PostgreSQL 17 sous Docker Compose (`compose.yaml` prod-like, `compose.dev.yaml`
-pour l'itération) — voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+**État** : jalon 4 (multi-chorale frontend) figé au tag `v1.1.0-rc.2`. Backend et
+frontend passent respectivement ~246 et ~77 tests. PostgreSQL 17 sous Docker
+Compose (`compose.yaml` prod-like, `compose.dev.yaml` pour l'itération) — voir
+[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+
+**Branches** (identiques dans les trois dépôts) : `main` est la ligne de
+développement à jour ; `release/mvp-v1` est l'**unique** ligne de release, sur
+laquelle les tags s'incrémentent malgré son nom historique. À la clôture d'un
+jalon, les deux convergent sur le même commit et le tag annoté y est posé. Les
+tags ne vivent que sur le superprojet : ses pointeurs figent déjà les
+sous-modules.
 
 - **Code** (variables, classes, champs DB) : anglais.
 - **UI, logs, commentaires métier** : français — volontaire et cohérent dans
