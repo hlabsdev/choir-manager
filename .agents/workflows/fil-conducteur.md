@@ -22,7 +22,7 @@ vérifié et documenté.
 | Jalon en cours | Jalon 4 — passage 1:N frontend : **implémenté, validation manuelle en attente** (non tagué) |
 | Base de données | PostgreSQL 17 sous Docker Compose |
 | Tests backend | 237 (`pytest -q`) |
-| Tests frontend | 69 (Vitest) |
+| Tests frontend | 77 (Vitest) |
 | Feuille de route détaillée | `docs/choirmanager_feuille_de_route_v2.md` |
 | Runbook d'exploitation | `docs/DEPLOIEMENT.md` |
 
@@ -122,7 +122,7 @@ appartenance à plusieurs chorales, changement de chorale, et rôles scopés.
   que la surface plateforme ; `roleGuard` perd sa dérogation et les routes
   opérateur passent par `operateurGuard`.
 - [x] Claim `groups` renommé `roles` des deux côtés (`cff1d69`).
-- [x] Tests Vitest : 32 → 69, garanties centrales validées par mutation.
+- [x] Tests Vitest : 32 → 77, garanties centrales validées par mutation.
 
 ### Reste à faire avant de taguer `v1.1.0-rc.2`
 

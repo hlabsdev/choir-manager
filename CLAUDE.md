@@ -11,7 +11,7 @@ rapports. API Django REST + frontend Angular 21.
 **État** : jalon PostgreSQL/Docker figé au tag `v1.0.0-mvp.2`. La ligne de
 développement active est `main` ; `release/mvp-v1` (historique) et
 `release/mvp-v2` (stabilisation courante) sont des lignes de release, taguées
-au besoin. Backend et frontend passent respectivement ~237 et ~69 tests.
+au besoin. Backend et frontend passent respectivement ~237 et ~77 tests.
 PostgreSQL 17 sous Docker Compose (`compose.yaml` prod-like, `compose.dev.yaml`
 pour l'itération) — voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
@@ -62,7 +62,7 @@ dev), `WEASYPRINT_DLL_DIR` (GTK sous Windows, pour l'export PDF).
 npm run start        # tailwind build (une fois) + ng serve, http://localhost:4200
 npm run start:dev    # tailwind --watch en tâche de fond + ng serve
 npm run build        # tailwind build + ng build
-npm test             # Vitest (~69 tests)
+npm test             # Vitest (~77 tests)
 ```
 Tailwind v4 n'est **pas** branché sur le pipeline esbuild d'Angular — il est
 compilé explicitement via son CLI avant chaque serve/build. Si les styles
