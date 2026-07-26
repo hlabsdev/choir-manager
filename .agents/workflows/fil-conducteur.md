@@ -18,8 +18,8 @@ vérifié et documenté.
 | --- | --- |
 | Date du constat | 26 juillet 2026 |
 | Stade produit | MVP fonctionnel, multi-chorale backend **et** frontend |
-| Dernier jalon livré | Jalon 3 — passage 1:N backend (`v1.1.0-rc.1`) |
-| Jalon en cours | Jalon 4 — passage 1:N frontend : **implémenté, validation manuelle en attente** (non tagué) |
+| Dernier jalon livré | Jalon 4 — passage 1:N frontend (`v1.1.0-rc.2`) |
+| Jalon en cours | Jalon 5 — déploiement + sauvegardes testées |
 | Base de données | PostgreSQL 17 sous Docker Compose |
 | Tests backend | 246 (`pytest -q`) |
 | Tests frontend | 77 (Vitest) |
@@ -43,7 +43,7 @@ En cas de contradiction, appliquer cet ordre :
 | 1 | Docker + PostgreSQL | `v1.0.0-mvp.2` | livré |
 | 2 | Cloisonnement opérateur / administrateur de tenant | `v1.0.0-mvp.3` | livré |
 | 3 | Passage 1:N — backend | `v1.1.0-rc.1` | livré |
-| 4 | Passage 1:N — frontend | `v1.1.0-rc.2` | implémenté, **non validé manuellement** |
+| 4 | Passage 1:N — frontend | `v1.1.0-rc.2` | **livré** |
 | 5 | Déploiement + sauvegardes testées | — | à venir |
 | 6 | Pilote réel 4–6 semaines, une seule chorale | `v1.1.0` | à venir |
 
@@ -87,7 +87,7 @@ Deux tests structurels (`core/tests/test_resolution_tenant_interne.py`) ferment
 les classes de régression qui se reproduisent à chaque nouveau ViewSet : lecture
 d'un attribut de tenant supprimé, et création directe de `Membre`.
 
-## 5. Jalon 4 — Passage 1:N frontend
+## 5. Jalon 4 — Passage 1:N frontend (LIVRÉ)
 
 ### Objectif
 
@@ -122,20 +122,33 @@ appartenance à plusieurs chorales, changement de chorale, et rôles scopés.
   que la surface plateforme ; `roleGuard` perd sa dérogation et les routes
   opérateur passent par `operateurGuard`.
 - [x] Claim `groups` renommé `roles` des deux côtés (`cff1d69`).
-- [x] Tests Vitest : 32 → 77, garanties centrales validées par mutation.
+- [x] Réinitialisation de mot de passe par le Bureau (manquait — la doc
+  l'affirmait sans qu'elle existe) : `POST /api/membres/{id}/
+  reinitialiser-mot-de-passe/`, mot de passe temporaire renvoyé une seule
+  fois, refusé (409) sur un compte multi-chorale ou superuser (`a41ddb8`,
+  `07c9e94`).
+- [x] Tests Vitest : 32 → 77 ; tests backend : 237 → 246. Garanties centrales
+  validées par mutation.
 
-### Reste à faire avant de taguer `v1.1.0-rc.2`
+### Validation manuelle (26 juillet 2026)
 
-- [ ] **Validation manuelle** : switch de chorale depuis `/dashboard` (le cas
-  `routeReuseStrategy`), onboarding compte-existant, écran sans-tenant, mode
-  opérateur — avec un compte réellement membre de deux chorales.
-- [ ] Point non couvert par les tests : `switch-chorale` réémet aussi le
-  *refresh* token. Un refresh silencieux concurrent de la bascule est le seul
-  scénario de course non simulé.
+Tous les parcours testés à la main sur un compte réellement membre de deux
+chorales, résultat **vert** :
 
-**Critère de sortie :** une personne membre de deux chorales bascule de l'une à
-l'autre dans l'interface, voit des rôles différents dans chacune, et aucune
-donnée de l'une n'apparaît dans l'autre.
+- switch de chorale depuis `/dashboard` (le cas `routeReuseStrategy`) ;
+- onboarding compte-existant (409 `compte_existant`) ;
+- écran sans-tenant (mention claire, invitation visible) ;
+- mode opérateur (« Gestion des chorales » → admin Django) ;
+- réinitialisation de mot de passe : refusée sur un compte multi-chorale
+  avec le message attendu, acceptée sur un compte à une seule chorale.
+
+Point non couvert par les tests, resté non simulé : `switch-chorale` réémet
+aussi le *refresh* token ; un refresh silencieux concurrent de la bascule
+n'a pas de scénario de course dédié. Non bloquant pour ce jalon.
+
+**Critère de sortie atteint :** une personne membre de deux chorales bascule
+de l'une à l'autre dans l'interface, voit des rôles différents dans chacune,
+et aucune donnée de l'une n'apparaît dans l'autre.
 
 ### Point d'architecture acté
 
