@@ -13,7 +13,7 @@ Le produit associe une API Django REST à une interface Angular mobile-first :
 
 > **État réel au 26 juillet 2026 :** le périmètre fonctionnel du MVP est
 > implémenté, le multi-chorale l'est côté backend ET frontend, et les suites
-> passent — 237 tests backend et 77 tests frontend. Le projet reste un
+> passent — 246 tests backend et 77 tests frontend. Le projet reste un
 > environnement de développement : il n'est pas encore prêt pour héberger des
 > données réelles en production.
 
@@ -367,7 +367,7 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient 237 tests couvrant notamment l'authentification, l'isolation
+La suite contient 246 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
 présences, la musique, les finances, les annonces, les notifications, les
 rapports et la suspension d'une chorale.
@@ -391,7 +391,7 @@ Les garanties multi-chorale se valident **par mutation**, pas par une suite vert
 
 Dernière vérification documentaire, le 26 juillet 2026 :
 
-- backend : 237 tests réussis ;
+- backend : 246 tests réussis ;
 - frontend : 77 tests réussis.
 
 ## Travailler avec les sous-modules

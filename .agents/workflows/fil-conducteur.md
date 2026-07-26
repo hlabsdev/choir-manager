@@ -21,7 +21,7 @@ vérifié et documenté.
 | Dernier jalon livré | Jalon 3 — passage 1:N backend (`v1.1.0-rc.1`) |
 | Jalon en cours | Jalon 4 — passage 1:N frontend : **implémenté, validation manuelle en attente** (non tagué) |
 | Base de données | PostgreSQL 17 sous Docker Compose |
-| Tests backend | 237 (`pytest -q`) |
+| Tests backend | 246 (`pytest -q`) |
 | Tests frontend | 77 (Vitest) |
 | Feuille de route détaillée | `docs/choirmanager_feuille_de_route_v2.md` |
 | Runbook d'exploitation | `docs/DEPLOIEMENT.md` |
@@ -160,6 +160,12 @@ nouvelle.
 
 ## 7. Limites et dette connues
 
+- **pas de réinitialisation de mot de passe par email** : la voie actuelle est
+  `POST /api/membres/{id}/reinitialiser-mot-de-passe/` (Bureau), qui génère un
+  mot de passe temporaire à transmettre de vive voix. Un reset par email
+  suppose un SMTP en état de marche — jalon 5. Un compte multi-chorale ou
+  superuser est refusé (409) et relève de l'opérateur : le mot de passe ouvre
+  le compte entier, donc toutes ses chorales ;
 - **pas de sélecteur toutes-chorales pour l'opérateur** : l'API n'expose aucun
   endpoint Chorale, et `switch-chorale` ne peut émettre un token que pour une
   chorale dont le compte est membre — un opérateur n'en a aucune par définition.

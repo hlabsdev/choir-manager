@@ -11,7 +11,7 @@ rapports. API Django REST + frontend Angular 21.
 **État** : jalon PostgreSQL/Docker figé au tag `v1.0.0-mvp.2`. La ligne de
 développement active est `main` ; `release/mvp-v1` (historique) et
 `release/mvp-v2` (stabilisation courante) sont des lignes de release, taguées
-au besoin. Backend et frontend passent respectivement ~237 et ~77 tests.
+au besoin. Backend et frontend passent respectivement ~246 et ~77 tests.
 PostgreSQL 17 sous Docker Compose (`compose.yaml` prod-like, `compose.dev.yaml`
 pour l'itération) — voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
@@ -45,7 +45,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~237 tests)
+pytest -q                           # suite complète (~246 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
