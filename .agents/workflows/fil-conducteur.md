@@ -1,6 +1,6 @@
 ---
 description: Source unique de l'état réel, du prochain jalon et de l'ordre de travail de ChoirManager
-updated: 2026-07-25
+updated: 2026-07-26
 ---
 
 # ChoirManager — Fil conducteur global
@@ -161,7 +161,50 @@ tokens doit rejoindre ce chemin : trois implémentations parallèles, c'est troi
 occasions d'afficher les données de l'ancienne chorale sous le nom de la
 nouvelle.
 
-## 6. Décisions arrêtées (ne pas re-proposer)
+## 6. Jalon 5 — à traiter EN OUVERTURE
+
+### Dette de processus : la réinitialisation de mot de passe
+
+**À reprendre avant toute autre chose au jalon 5.**
+
+Le mécanisme a été livré en fin de session frontend (`a41ddb8`, `07c9e94`),
+**sans plan validé ni revue dédiée du modèle de menace** — contrairement aux
+quatre jalons précédents, où chaque changement touchant aux permissions avait
+été cadré avant d'être écrit. Il est né d'un constat de dernière minute : la
+documentation affirmait depuis longtemps que « le Bureau peut refixer un mot de
+passe », alors qu'aucun code ne l'implémentait.
+
+Le raisonnement retenu tient, et il est écrit dans `membres/services.py` : le
+mot de passe est la SEULE donnée du modèle qui ne soit pas cloisonnée par
+chorale, donc le réinitialiser ouvre le compte entier et toutes ses
+appartenances ; d'où le refus (409) des comptes multi-chorale et superuser, avec
+le garde-fou placé dans le service et non dans la vue. Neuf tests, dont le test
+central validé par mutation.
+
+Ce qui manque n'est pas la logique, c'est **le processus** : aucune revue n'a
+cherché ce que ce raisonnement pourrait avoir manqué. Points restés non
+instruits, à examiner explicitement :
+
+- pas de limitation de débit sur l'endpoint — un Bureau compromis peut
+  réinitialiser en boucle ;
+- aucune invalidation des sessions/tokens existants de la personne : ses JWT
+  restent valides jusqu'à expiration après changement du mot de passe ;
+- aucune journalisation côté serveur, seulement une notification in-app au
+  destinataire (aucune trace côté Bureau ni côté exploitant) ;
+- pas d'obligation de changer le mot de passe temporaire à la première
+  connexion.
+
+**Le SMTP du jalon 5 rouvre ce flux de toute façon** (réinitialisation par
+email, avec jeton à usage unique). C'est à ce moment-là que l'ensemble doit être
+repris proprement — plan, modèle de menace, validation par mutation — et
+**non traité comme un acquis** parce qu'un mécanisme existe déjà.
+
+### Reste du jalon 5
+
+SMTP, sauvegardes testées, CI/CD, supervision et procédure d'incident.
+Périmètre à cadrer.
+
+## 7. Décisions arrêtées (ne pas re-proposer)
 
 - **Aucun email au titulaire d'un compte existant** lorsqu'une inscription
   publique est tentée avec son adresse. Le 409 `compte_existant` oriente déjà
@@ -171,7 +214,7 @@ nouvelle.
   sécurité, la divulgation étant déjà bornée par la nécessité de détenir un
   code d'invitation valide pour atteindre ce formulaire.
 
-## 7. Limites et dette connues
+## 8. Limites et dette connues
 
 - **pas de réinitialisation de mot de passe par email** : la voie actuelle est
   `POST /api/membres/{id}/reinitialiser-mot-de-passe/` (Bureau), qui génère un
@@ -212,7 +255,7 @@ nouvelle.
   jalon 4, mais à instrumenter avant tout trafic concurrent réel — le symptôme
   touche l'authentification elle-même, pas un mécanisme isolé.
 
-## 8. Discipline Git
+## 9. Discipline Git
 
 Le dépôt racine est un **superprojet** ; `chm-backend/` et `chm-frontend/` sont
 des sous-modules avec leur propre remote et leur propre historique.
@@ -228,13 +271,13 @@ Ordre imposé pour toute modification applicative :
 Ne jamais committer un fichier applicatif depuis la racine. `git status` à la
 racine ne montre que les pointeurs : utiliser `git -C chm-backend status`.
 
-## 9. Après le pilote
+## 10. Après le pilote
 
 Backlog, à prioriser depuis les retours d'usage uniquement : PWA et partitions
 hors ligne, calendrier externe, notifications push/SMS, enregistrements
 audio/vidéo, module Activités/Planning, application native.
 
-## 10. Règle de mise à jour
+## 11. Règle de mise à jour
 
 À la fin de chaque bloc : exécuter les tests concernés, mettre à jour l'état et
 les preuves ici, mettre à jour `CLAUDE.md` et les README affectés, publier les
