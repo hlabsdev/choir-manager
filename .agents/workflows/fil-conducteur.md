@@ -131,7 +131,17 @@ appartenance à plusieurs chorales, changement de chorale, et rôles scopés.
 l'autre dans l'interface, voit des rôles différents dans chacune, et aucune
 donnée de l'une n'apparaît dans l'autre.
 
-## 6. Limites et dette connues
+## 6. Décisions arrêtées (ne pas re-proposer)
+
+- **Aucun email au titulaire d'un compte existant** lorsqu'une inscription
+  publique est tentée avec son adresse. Le 409 `compte_existant` oriente déjà
+  la personne au clavier, qui est celle qui agit ; prévenir le titulaire
+  ajouterait un vecteur de nuisance — n'importe qui pourrait faire partir des
+  emails vers une adresse en la saisissant en boucle — sans bénéfice de
+  sécurité, la divulgation étant déjà bornée par la nécessité de détenir un
+  code d'invitation valide pour atteindre ce formulaire.
+
+## 7. Limites et dette connues
 
 - le frontend lit encore `is_superuser` (cf. jalon 4 ci-dessus) ;
 - l'admin Django ne propose pas de sélecteur de tenant : un administrateur
@@ -161,7 +171,7 @@ donnée de l'une n'apparaît dans l'autre.
   jalon 4, mais à instrumenter avant tout trafic concurrent réel — le symptôme
   touche l'authentification elle-même, pas un mécanisme isolé.
 
-## 7. Discipline Git
+## 8. Discipline Git
 
 Le dépôt racine est un **superprojet** ; `chm-backend/` et `chm-frontend/` sont
 des sous-modules avec leur propre remote et leur propre historique.
@@ -177,13 +187,13 @@ Ordre imposé pour toute modification applicative :
 Ne jamais committer un fichier applicatif depuis la racine. `git status` à la
 racine ne montre que les pointeurs : utiliser `git -C chm-backend status`.
 
-## 8. Après le pilote
+## 9. Après le pilote
 
 Backlog, à prioriser depuis les retours d'usage uniquement : PWA et partitions
 hors ligne, calendrier externe, notifications push/SMS, enregistrements
 audio/vidéo, module Activités/Planning, application native.
 
-## 9. Règle de mise à jour
+## 10. Règle de mise à jour
 
 À la fin de chaque bloc : exécuter les tests concernés, mettre à jour l'état et
 les preuves ici, mettre à jour `CLAUDE.md` et les README affectés, publier les
