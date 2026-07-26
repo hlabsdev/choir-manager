@@ -174,6 +174,27 @@ Aucun autre avertissement ne doit apparaître.
 
 ## 5. Exploitation courante
 
+### Redéployer UN service sans réveiller toute la pile
+
+`docker compose up -d --build frontend` reconstruit et redémarre bien plus que
+le frontend : Compose remonte toute la chaîne de dépendances déclarée
+(`frontend` → `backend` → `migrate` → `db`). Les migrations sont donc rejouées
+et le backend recréé, alors qu'on ne voulait toucher qu'au bundle Angular.
+
+Pour se limiter au service visé :
+
+```bash
+docker compose up -d --build --no-deps frontend    # ou : make up-frontend
+```
+
+`--no-deps` suppose que les dépendances tournent déjà et sont saines : à
+utiliser pour un redéploiement incrémental, jamais pour un premier démarrage.
+Vérifier avant avec `make ps`.
+
+Rejouer les migrations n'est pas dangereux — elles sont idempotentes, une
+migration déjà appliquée est ignorée — mais c'est du temps perdu, et le
+redémarrage du backend coupe les requêtes en cours.
+
 ### Atteindre le backend directement
 
 Dans la pile cible, le backend **ne publie aucun port** : il n'est joignable que

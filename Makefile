@@ -10,7 +10,7 @@ COMPOSE_API  := docker compose -f compose.yaml -f compose.api-direct.yaml
 HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 
 .DEFAULT_GOAL := aide
-.PHONY: aide env config build up up-api dev down logs ps \
+.PHONY: aide env config build up up-api up-frontend up-backend dev down logs ps \
         migrate makemigrations check check-deploy shell dbshell \
         superuser provision seed \
         test test-backend test-frontend collect front-build \
@@ -43,6 +43,18 @@ up: ## Démarre la pile production-like (db → migrate → backend → frontend
 up-api: ## Comme `up`, mais publie aussi l'API sur 127.0.0.1:8000 (reste en Gunicorn/DEBUG=False)
 	$(COMPOSE_API) up -d
 	@echo "→ Frontend : http://127.0.0.1:8080   API directe : http://127.0.0.1:8000"
+
+up-frontend: ## Reconstruit et redéploie le SEUL frontend (pile déjà démarrée)
+	@$(COMPOSE) ps --status running --services | grep -qx backend \
+	  || (echo "→ backend arrêté : lancer 'make up' d'abord (--no-deps ne démarre pas les dépendances)"; exit 1)
+	$(COMPOSE) up -d --build --no-deps frontend
+	@echo "→ Frontend redéployé : http://127.0.0.1:8080"
+
+up-backend: ## Reconstruit et redéploie le SEUL backend, sans rejouer les migrations
+	@$(COMPOSE) ps --status running --services | grep -qx db \
+	  || (echo "→ base arrêtée : lancer 'make up' d'abord"; exit 1)
+	$(COMPOSE) up -d --build --no-deps backend
+	@echo "→ Backend redéployé (migrations NON rejouées : 'make migrate' si le schéma a changé)"
 
 dev: ## Démarre la pile avec les surcharges de développement (runserver, DEBUG=True)
 	$(COMPOSE_DEV) up -d
