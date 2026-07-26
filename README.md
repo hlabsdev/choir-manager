@@ -11,10 +11,11 @@ Le produit associe une API Django REST à une interface Angular mobile-first :
 - `chm-frontend/` : Angular 21 standalone et zoneless, Signals, Tailwind CSS 4
   et Vitest.
 
-> **État réel au 24 juillet 2026 :** le périmètre fonctionnel du MVP est
-> implémenté et les suites disponibles passent — 129 tests backend et 32 tests
-> frontend. Le projet reste un environnement de développement : il n'est pas
-> encore prêt pour héberger des données réelles en production.
+> **État réel au 26 juillet 2026 :** le périmètre fonctionnel du MVP est
+> implémenté, le multi-chorale l'est côté backend ET frontend, et les suites
+> passent — 237 tests backend et 69 tests frontend. Le projet reste un
+> environnement de développement : il n'est pas encore prêt pour héberger des
+> données réelles en production.
 
 Le code, les noms de classes et les champs de base de données sont en anglais.
 Les textes d'interface, les logs et les commentaires métier sont volontairement
@@ -366,7 +367,7 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient 129 tests couvrant notamment l'authentification, l'isolation
+La suite contient 237 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
 présences, la musique, les finances, les annonces, les notifications, les
 rapports et la suspension d'une chorale.
@@ -379,14 +380,19 @@ npm test
 npm run build
 ```
 
-La suite actuelle contient 32 tests Vitest répartis dans 7 fichiers. Elle couvre
-les guards, des utilitaires partagés et des composants clés de structure,
+La suite actuelle contient 69 tests Vitest répartis dans 12 fichiers. Elle couvre
+les guards (dont le cloisonnement opérateur), le décodage du token, le chemin
+unique de bascule de chorale, le sélecteur de tenant, la coquille applicative, le
+dashboard, des utilitaires partagés et des composants clés de structure,
 d'annonces et de rapports.
 
-Dernière vérification documentaire, le 24 juillet 2026 :
+Les garanties multi-chorale se valident **par mutation**, pas par une suite verte
+— protocole et tableau des mutations dans `chm-frontend/README.md`.
 
-- backend : 129 tests réussis ;
-- frontend : 32 tests réussis.
+Dernière vérification documentaire, le 26 juillet 2026 :
+
+- backend : 237 tests réussis ;
+- frontend : 69 tests réussis.
 
 ## Travailler avec les sous-modules
 
