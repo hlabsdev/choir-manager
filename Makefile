@@ -12,7 +12,7 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 .DEFAULT_GOAL := aide
 .PHONY: aide env config build up up-api up-frontend up-backend dev down logs ps \
         migrate makemigrations check check-deploy shell dbshell \
-        superuser provision seed \
+        superuser provision seed purge-tokens \
         test test-backend test-frontend collect front-build \
         sauvegarde restauration audit-image nettoyage-jetable
 
@@ -98,6 +98,10 @@ provision: ## Provisionne une chorale — make provision ARGS="--nom '...' --pre
 
 seed: ## 2e chorale de démo — dev/QA UNIQUEMENT, jamais en production
 	$(COMPOSE) run --rm backend python manage.py seed_demo_chorale
+
+purge-tokens: ## Purge les refresh tokens expirés (à planifier quotidiennement, cf. §5)
+	$(COMPOSE) exec -T backend python manage.py flushexpiredtokens
+	@echo "→ Tokens expirés purgés."
 
 # ---------------------------------------------------------------------------
 # Tests

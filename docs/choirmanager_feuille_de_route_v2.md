@@ -543,6 +543,47 @@ du plan Docker comme base. Trois points qui ne sont dans aucun document actuel :
   Cloudflare Pages. Le polling 60s disqualifie les offres gratuites à quota
   d'heures.
 
+### Instruction de session — Jalon 5
+```
+Jalon 5, bloc 1 — prérequis avant tout le reste : invalidation des JWT existants
+au changement de mot de passe.
+
+PROBLÈME
+Aujourd'hui, changer son mot de passe ne révoque aucun token émis avant. Si le
+changement est motivé par une compromission suspectée, l'attaquant garde
+l'accès jusqu'à expiration du refresh token (7 jours). C'est une fausse
+promesse de sécurité.
+
+PHASE 1 — PLAN (ne code rien, présente et attends validation)
+1. SimpleJWT permet plusieurs stratégies : blacklist du refresh token
+   (django-rest-framework-simplejwt blacklist app, si pas déjà installée),
+   rotation avec révocation, ou un champ de version/timestamp sur User comparé
+   à l'iat du token. Recommande une approche et justifie-la au regard de
+   l'existant (rotation de refresh déjà en place depuis le jalon 1).
+2. Un changement de mot de passe doit invalider TOUS les refresh tokens actifs
+   du user, pas seulement celui de la session courante — sinon une session sur
+   un autre appareil reste valide indéfiniment.
+3. Le user qui vient de changer son mot de passe doit rester connecté sur SA
+   session courante (réémission immédiate d'un couple access/refresh), sans quoi
+   l'UX se dégrade pour tout le monde à chaque changement volontaire.
+4. Vérifie l'articulation avec le garde-fou multi-chorale du reset (refus 409
+   sur compte multi-chorale/superuser) : ce garde-fou protège le RESET, il ne
+   dit rien sur l'invalidation lors d'un changement de mot de passe volontaire
+   (utilisateur connecté qui change son mot de passe depuis son profil) — les
+   deux flux sont différents, ne les confonds pas.
+
+PHASE 2 — après validation
+Implémente, avec tests obligatoires :
+- Ancien refresh token rejeté après changement de mot de passe (toutes sessions).
+- Session courante reste fonctionnelle immédiatement après le changement.
+- Le flux normal de refresh (rotation) n'est pas cassé pour un user qui n'a
+  rien changé.
+- Validation par mutation : neutralise l'invalidation, vérifie que le test
+  dédié devient rouge.
+
+Contraintes : backend uniquement. Plan avant code. Ne commit pas.
+```
+
 ## Jalon 6 — Pilote
 
 4 à 6 semaines, **une seule chorale : la tienne**. Vraies répétitions, vrai

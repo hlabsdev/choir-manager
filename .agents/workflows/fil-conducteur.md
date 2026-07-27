@@ -184,23 +184,50 @@ central validé par mutation.
 Ce qui manque n'est pas la logique, c'est **le processus** : aucune revue n'a
 cherché ce que ce raisonnement pourrait avoir manqué.
 
-#### Prérequis ordonné — révoquer les sessions AVANT le reset par email
+#### Bloc 1 — révocation des sessions ✅ BACKEND FAIT, front à suivre
 
-**Décision de cadrage : l'invalidation des JWT au changement de mot de passe se
-traite AVANT le reset par email, pas en même temps.**
+**Décision de cadrage tenue : l'invalidation des JWT s'est traitée AVANT le
+reset par email.** Motif : changer un mot de passe sans rien révoquer était une
+fausse promesse de sécurité — l'attaquant gardait l'accès jusqu'à expiration du
+refresh, soit 7 jours. Le reset par email augmentera la surface (lien
+interceptable, rejouable) : on ne pose pas ce flux sur un socle qui ne révoque
+rien. Même logique que PostgreSQL avant la refonte 1:N.
 
-Aujourd'hui, changer un mot de passe ne révoque rien : les access et refresh
-tokens déjà émis restent valides jusqu'à expiration, soit **7 jours** pour le
-refresh. C'est une fausse promesse de sécurité — quelqu'un qui soupçonne une
-compromission change son mot de passe en croyant fermer la porte, et l'attaquant
-conserve l'accès une semaine.
+Livré côté backend :
 
-Le reset par email **augmentera** cette surface : un lien envoyé par email peut
-être intercepté ou rejoué. On ne construit pas ce flux au-dessus d'un mécanisme
-qui ne révoque pas les sessions existantes.
+- app `rest_framework_simplejwt.token_blacklist` activée (aucune nouvelle
+  dépendance, elle est dans le paquet déjà installé) ;
+- `authentication/services.py::revoquer_toutes_les_sessions()` — primitive
+  partagée, révoque **tous** les refresh vivants du compte, pas seulement celui
+  de la session courante ;
+- appelée par les DEUX flux : changement self-service et réinitialisation
+  Bureau. Différence assumée : le self-service **réémet** un couple pour la
+  session courante (sinon changer son mot de passe déconnecterait celui qui le
+  change), le flux Bureau non — le demandeur n'est pas le titulaire ;
+- 12 tests, 3 mutations vérifiées (révocation retirée de chaque flux, filtre
+  `user` retiré de la primitive).
 
-Même logique d'ordonnancement que PostgreSQL avant la refonte 1:N : on ne pose
-pas la couche suivante sur un socle dont on sait déjà qu'il devra être repris.
+**Portée réelle, à ne pas surestimer** : seuls les *refresh* sont révocables —
+`AccessToken` n'hérite pas de `BlacklistMixin` côté SimpleJWT. Un access volé
+reste utilisable jusqu'à sa propre expiration, **30 minutes au plus**. Le gain
+est de ramener la fenêtre de 7 jours à 30 minutes, pas de la supprimer.
+
+**Conséquence d'exploitation** : la table `OutstandingToken` grandit à chaque
+émission (y compris à chaque rotation, soit toutes les 30 min par session
+active). Purge quotidienne `make purge-tokens` à planifier — cf.
+`docs/DEPLOIEMENT.md` § Exploitation courante.
+
+##### Fast-follow frontend — À FAIRE IMMÉDIATEMENT APRÈS
+
+`AuthService.changerMotDePasse()` ignore aujourd'hui la réponse de l'endpoint,
+qui porte désormais un couple `access`/`refresh` frais. Tant qu'il n'applique
+pas ces tokens, l'onglet qui vient de changer son mot de passe **se déconnecte
+lui aussi** à l'expiration de son access (≤ 30 min), au même titre que les
+sessions qu'on voulait fermer.
+
+Le backend est correct ; c'est le confort visé qui n'est pas atteint. Petite
+session front dédiée, à ne pas repousser — sinon la dette traîne et le
+comportement paraîtra être un bug.
 
 #### Autres points non instruits
 
@@ -218,10 +245,28 @@ email, avec jeton à usage unique). C'est à ce moment-là que l'ensemble doit �
 repris proprement — plan, modèle de menace, validation par mutation — et
 **non traité comme un acquis** parce qu'un mécanisme existe déjà.
 
+### Bloc suivant — `BLACKLIST_AFTER_ROTATION`
+
+Volontairement **non traité** avec le bloc 1, pour ne pas mélanger deux
+décisions dans un même changement.
+
+Configuration actuelle : `ROTATE_REFRESH_TOKENS=True`,
+`BLACKLIST_AFTER_ROTATION=False`. Conséquence : un refresh **intercepté reste
+rejouable après sa rotation naturelle** par le titulaire légitime. L'attaquant
+qui a capté un refresh peut s'en servir même après que la victime l'a fait
+tourner, jusqu'à expiration.
+
+L'activation est quasi gratuite maintenant que l'app blacklist est en place
+(même mécanisme, un booléen). Ni urgent, ni cosmétique. Un test fige aujourd'hui
+le comportement actuel
+(`authentication/tests/test_revocation_sessions.py::test_un_refresh_deja_tourne_reste_rejouable`)
+pour que le durcissement soit un choix explicite et non un effet de bord — ce
+test sera à mettre à jour, et cette entrée à retirer, le jour où on l'active.
+
 ### Reste du jalon 5
 
-SMTP, sauvegardes testées, CI/CD, supervision et procédure d'incident.
-Périmètre à cadrer.
+SMTP (et le reset par email qu'il débloque), sauvegardes testées, CI/CD,
+supervision et procédure d'incident. Périmètre à cadrer.
 
 ## 7. Décisions arrêtées (ne pas re-proposer)
 

@@ -195,6 +195,46 @@ Rejouer les migrations n'est pas dangereux — elles sont idempotentes, une
 migration déjà appliquée est ignorée — mais c'est du temps perdu, et le
 redémarrage du backend coupe les requêtes en cours.
 
+### Purge des refresh tokens — À PLANIFIER
+
+Depuis l'activation de `rest_framework_simplejwt.token_blacklist`, **chaque
+refresh token émis crée une ligne** dans `token_blacklist_outstandingtoken` :
+à chaque connexion, chaque changement de chorale, chaque acceptation
+d'invitation, et **à chaque rotation de refresh** — soit toutes les 30 minutes
+pour une session active. Une session active à la journée produit donc une
+cinquantaine de lignes.
+
+Cette table ne se vide pas toute seule. Sans purge, elle grossit
+indéfiniment ; le symptôme n'apparaîtra qu'après des mois, sous forme de
+sauvegardes qui gonflent et de requêtes de révocation qui ralentissent.
+
+```bash
+make purge-tokens        # docker compose exec backend manage.py flushexpiredtokens
+```
+
+**Fréquence retenue : quotidienne**, à une heure creuse. Le raisonnement :
+les refresh vivent 7 jours (`REFRESH_TOKEN_LIFETIME`), donc une purge
+quotidienne borne la table à ~8 jours d'émissions, contre ~14 avec un
+rythme hebdomadaire. L'opération est un `DELETE` indexé sur `expires_at`,
+assez peu coûteux pour ne pas justifier d'espacer davantage — et un rythme
+quotidien rend une panne de la tâche visible en un jour plutôt qu'en une
+semaine.
+
+Entrée cron de l'hôte (la pile n'embarque pas d'ordonnanceur) :
+
+```cron
+17 4 * * *  cd /chemin/vers/choir-manager && make purge-tokens >> /var/log/chm-purge-tokens.log 2>&1
+```
+
+`flushexpiredtokens` ne supprime que les tokens **déjà expirés** : il ne
+révoque rien et ne déconnecte personne. Il est sans danger à toute heure, et
+rejouable sans effet de bord.
+
+> ⚠️ La révocation elle-même (changement de mot de passe) ne dépend PAS de
+> cette purge. Une purge en retard fait grossir la table, elle n'ouvre aucun
+> accès : un token expiré est refusé sur sa date d'expiration, blacklisté ou
+> non.
+
 ### Atteindre le backend directement
 
 Dans la pile cible, le backend **ne publie aucun port** : il n'est joignable que
