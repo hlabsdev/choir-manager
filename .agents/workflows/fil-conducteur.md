@@ -21,8 +21,8 @@ vérifié et documenté.
 | Dernier jalon livré | Jalon 4 — passage 1:N frontend (`v1.1.0-rc.2`) |
 | Jalon en cours | Jalon 5 — déploiement + sauvegardes testées |
 | Base de données | PostgreSQL 17 sous Docker Compose |
-| Tests backend | 246 (`pytest -q`) |
-| Tests frontend | 77 (Vitest) |
+| Tests backend | 260 (`pytest -q`) |
+| Tests frontend | 82 (Vitest) |
 | Feuille de route détaillée | `docs/choirmanager_feuille_de_route_v2.md` |
 | Runbook d'exploitation | `docs/DEPLOIEMENT.md` |
 
@@ -152,14 +152,24 @@ et aucune donnée de l'une n'apparaît dans l'autre.
 
 ### Point d'architecture acté
 
-Les TROIS endpoints qui réémettent un couple de tokens (`switch-chorale/`,
-`invitations/rejoindre-avec-mon-compte/`, `mes-invitations/{id}/accepter/`)
-changent de tenant et passent tous par
-`TenantContextService.appliquerContexteTenant()` — jamais par
-`AuthService.appliquerTokens()` en direct. Tout nouvel endpoint réémettant des
-tokens doit rejoindre ce chemin : trois implémentations parallèles, c'est trois
-occasions d'afficher les données de l'ancienne chorale sous le nom de la
-nouvelle.
+Pour tout endpoint réémettant un couple access/refresh, le chemin dépend d'un
+seul critère : **la chorale ouverte change-t-elle ?**
+
+| Cas | Chemin |
+| --- | --- |
+| Changement de tenant | `TenantContextService.appliquerContexteTenant()` |
+| Même tenant, nouveaux tokens | `AuthService.appliquerTokens()` |
+
+`appliquerContexteTenant()` purge l'état applicatif et **renavigue** :
+indispensable en cas de changement de chorale — trois implémentations
+parallèles, c'était trois occasions d'afficher les données de l'ancienne
+chorale sous le nom de la nouvelle — mais néfaste sinon, la personne étant
+éjectée de l'écran où elle travaille.
+
+Changent de tenant : `switch-chorale/`,
+`invitations/rejoindre-avec-mon-compte/`, `mes-invitations/{id}/accepter/`.
+Ne change pas de tenant : `changer-mot-de-passe/` (jalon 5), qui révoque
+toutes les sessions et en réémet une en préservant la chorale active.
 
 ## 6. Jalon 5 — à traiter EN OUVERTURE
 

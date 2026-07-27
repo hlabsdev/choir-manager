@@ -9,7 +9,7 @@ répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
 **État** : jalon 4 (multi-chorale frontend) figé au tag `v1.1.0-rc.2`. Backend et
-frontend passent respectivement ~246 et ~77 tests. PostgreSQL 17 sous Docker
+frontend passent respectivement ~260 et ~82 tests. PostgreSQL 17 sous Docker
 Compose (`compose.yaml` prod-like, `compose.dev.yaml` pour l'itération) — voir
 [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
@@ -50,7 +50,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~246 tests)
+pytest -q                           # suite complète (~260 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
@@ -67,7 +67,7 @@ dev), `WEASYPRINT_DLL_DIR` (GTK sous Windows, pour l'export PDF).
 npm run start        # tailwind build (une fois) + ng serve, http://localhost:4200
 npm run start:dev    # tailwind --watch en tâche de fond + ng serve
 npm run build        # tailwind build + ng build
-npm test             # Vitest (~77 tests)
+npm test             # Vitest (~82 tests)
 ```
 Tailwind v4 n'est **pas** branché sur le pipeline esbuild d'Angular — il est
 compilé explicitement via son CLI avant chaque serve/build. Si les styles
@@ -283,11 +283,22 @@ Standalone components + Signals uniquement (pas de NgModules, pas de
 - `layout/chorale-selector/` — bascule de tenant. **Masqué à une seule chorale**
   (cas de la quasi-totalité des comptes réels) : le nom seul est affiché.
 
-**Changer de chorale passe par `TenantContextService`, jamais autrement.** Trois
-endpoints réémettent un couple access/refresh et changent donc de tenant :
-`switch-chorale/`, `invitations/rejoindre-avec-mon-compte/` et
-`mes-invitations/{id}/accepter/`. Tous appellent
-`appliquerContexteTenant()` — jamais `AuthService.appliquerTokens()` en direct.
+**Règle générale pour tout endpoint qui réémet un couple access/refresh :**
+
+| Cas | Chemin |
+| --- | --- |
+| **Changement de tenant** | `TenantContextService.appliquerContexteTenant()` |
+| **Même tenant, nouveaux tokens** | `AuthService.appliquerTokens()` |
+
+Le critère n'est **pas** « l'endpoint renvoie-t-il des tokens ? » mais « la
+chorale ouverte change-t-elle ? ». `appliquerContexteTenant()` purge l'état
+applicatif et **renavigue** : indispensable en cas de changement de chorale,
+néfaste sinon — la personne serait éjectée de l'écran où elle travaillait.
+
+Changent de tenant : `switch-chorale/`,
+`invitations/rejoindre-avec-mon-compte/`, `mes-invitations/{id}/accepter/`.
+Ne change pas de tenant : `changer-mot-de-passe/`, qui révoque toutes les
+sessions du compte et en réémet une seule en préservant la chorale active.
 Ordre non interchangeable : tokens, puis purge de l'état applicatif, puis
 renavigation. Purger après avoir navigué laisserait le nouvel écran se peupler
 depuis des signaux encore chargés de l'ancien tenant, et l'utilisateur verrait
