@@ -85,13 +85,17 @@ jobs:
 
       # Garde-fou §9.1 : une baisse silencieuse du nombre de tests doit arrêter
       # la validation, pas passer inaperçue.
-      - name: Baseline — au moins 129 tests collectés
+      # Le seuil suit la suite réelle, avec une marge : il doit arrêter une
+      # DISPARITION de tests, pas interdire d'en retirer un en refactorisant.
+      # À relever quand la suite progresse durablement — sinon il cesse de
+      # mordre et devient décoratif.
+      - name: Baseline — au moins 270 tests collectés
         working-directory: chm-backend
         run: |
           total=$(pytest --collect-only -q | tail -1 | grep -oE '^[0-9]+')
           echo "Tests collectés : $total"
-          if [ "$total" -lt 129 ]; then
-            echo "::error::Régression de couverture : $total tests collectés, minimum attendu 129."
+          if [ "$total" -lt 270 ]; then
+            echo "::error::Régression de couverture : $total tests collectés, minimum attendu 270."
             exit 1
           fi
 
