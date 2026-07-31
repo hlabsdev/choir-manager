@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# ChoirManager — garde-fou des pointeurs de sous-module.
+#
+# Refuse tout commit du superprojet dont les pointeurs ne décrivent pas
+# fidèlement l'état des sous-modules. Deux incidents réels l'ont motivé, dans
+# les deux cas le même geste : éditer un fichier du sous-module APRÈS l'avoir
+# commité, puis committer le superprojet — qui enregistre alors un pointeur en
+# retard sur ce qui existe réellement.
+#
+# Mécanique plutôt que procédurale : c'est le sens du .gitignore sur le CSS
+# généré — rendre l'erreur impossible plutôt que déconseillée.
+#
+# Installation : `make hooks` (pose core.hooksPath, une fois par clone).
+# Contournement d'urgence : `git commit --no-verify`.
+
+set -uo pipefail
+
+# Git exporte GIT_DIR / GIT_INDEX_FILE aux hooks, en chemins RELATIFS au
+# superprojet. Un `git -C <sous-module>` les hériterait et travaillerait sur le
+# mauvais dépôt — pire, il échoue en silence et renvoie une sortie vide, donc
+# « arbre propre ». Ce garde-fou avait cette faille à sa première écriture : il
+# validait tout. D'où ce wrapper, obligatoire pour TOUT appel git dans un
+# sous-module.
+gits() { env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_PREFIX git "$@"; }
+
+# Le contrôle ne concerne QUE les commits du superprojet.
+git rev-parse --show-superproject-working-tree 2>/dev/null | grep -q . && exit 0
+
+sous_modules=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}')
+[ -z "$sous_modules" ] && exit 0
+
+echec=0
+avertissement=0
+
+for chemin in $sous_modules; do
+  [ -d "$chemin/.git" ] || [ -f "$chemin/.git" ] || continue
+
+  # Le pointeur n'est vérifié que s'il est effectivement en train d'être
+  # enregistré : un commit qui ne touche pas au sous-module n'a pas à échouer
+  # parce que celui-ci a avancé de son côté.
+  stage=$(git ls-files --stage -- "$chemin" 2>/dev/null | awk '$1 == "160000" {print $2}')
+  [ -z "$stage" ] && continue
+  git diff --cached --quiet -- "$chemin" && continue
+
+  reel=$(gits -C "$chemin" rev-parse HEAD 2>/dev/null)
+  sale=$(gits -C "$chemin" status --porcelain 2>/dev/null)
+
+  if [ -n "$sale" ]; then
+    echo "✗ $chemin — arbre SALE : le pointeur ne contiendra pas ces modifications." >&2
+    echo "$sale" | sed 's/^/      /' >&2
+    echo "    → committer dans le sous-module d'abord, puis 'git add $chemin'." >&2
+    echec=1
+  fi
+
+  if [ "$stage" != "$reel" ]; then
+    echo "✗ $chemin — pointeur EN RETARD sur le HEAD du sous-module." >&2
+    echo "      enregistré : ${stage:0:12}" >&2
+    echo "      réel       : ${reel:0:12}" >&2
+    echo "    → 'git add $chemin' pour enregistrer le pointeur à jour." >&2
+    echec=1
+  fi
+
+  # Avertissement seulement : dépend de refs de suivi possiblement périmées, et
+  # un `git fetch` dans un hook de commit serait intrusif. Mais un superprojet
+  # publié qui référence un commit absent du remote casse tout clone — c'est
+  # arrivé une fois sur ce dépôt.
+  if [ "$echec" -eq 0 ] && ! gits -C "$chemin" branch -r --contains "$reel" 2>/dev/null | grep -q .; then
+    echo "⚠ $chemin — ${reel:0:12} ne figure sur aucune branche distante connue." >&2
+    echo "    → pousser le sous-module AVANT de pousser le superprojet." >&2
+    avertissement=1
+  fi
+done
+
+if [ "$echec" -ne 0 ]; then
+  echo "" >&2
+  echo "Commit refusé : les pointeurs de sous-module ne reflètent pas la réalité." >&2
+  echo "Forcer malgré tout : git commit --no-verify" >&2
+  exit 1
+fi
+
+[ "$avertissement" -ne 0 ] && echo "" >&2
+exit 0

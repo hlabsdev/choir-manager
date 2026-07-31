@@ -142,9 +142,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy   # le proxy /api/ exige un backend sain
-    # Seul port utilisateur de la pile, lié à la boucle locale.
+    # Seul port utilisateur de la pile. `FRONTEND_BIND` décide de son
+    # exposition : 127.0.0.1 pour la boucle locale seule, 0.0.0.0 pour
+    # joindre la pile depuis un autre appareil du réseau — ce dernier cas
+    # suppose un réseau de confiance, la pile n'ayant pas de TLS.
     ports:
-      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
+      - "${FRONTEND_BIND:-0.0.0.0}:${FRONTEND_PORT:-8080}:8080"
     volumes:
       # Les médias sont servis directement par Nginx : hors DEBUG, Django ne
       # sert pas MEDIA_URL (cf. chm_config/urls.py).

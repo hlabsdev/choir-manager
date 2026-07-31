@@ -40,6 +40,21 @@ dans son sous-module. `git status` à la racine ne montre que les pointeurs de
 sous-module, pas leur contenu interne : utiliser `git -C chm-backend status` /
 `git -C chm-frontend status` pour l'état réel de chaque application.
 
+**Garde-fou automatique — `make hooks`, une fois par clone.** Installe un
+`pre-commit` (versionné dans `.githooks/`) qui refuse tout commit du
+superprojet dont les pointeurs ne décrivent pas la réalité : arbre de
+sous-module sale, ou pointeur en retard sur son HEAD. L'erreur s'est produite
+deux fois, toujours par le même geste — éditer un fichier du sous-module APRÈS
+l'avoir commité et `git add`é. Mécanique plutôt que procédurale, comme le
+`.gitignore` sur le CSS généré. `make verif-sous-modules` lance le même
+contrôle à la demande ; `git commit --no-verify` le contourne en urgence.
+
+⚠️ Piège si vous touchez à ce hook : Git exporte `GIT_DIR`/`GIT_INDEX_FILE` aux
+hooks, en chemins relatifs au superprojet. Un `git -C <sous-module>` les hérite,
+échoue **en silence** et renvoie une sortie vide — donc « arbre propre ». Le
+hook validait tout à sa première écriture pour cette raison. Tout appel git
+dans un sous-module passe par le wrapper `gits()`.
+
 Pour restaurer un jalon figé (ex. `v1.0.0-mvp.2`) : `git checkout <tag> &&
 git submodule update --init --recursive`.
 

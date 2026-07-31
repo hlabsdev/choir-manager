@@ -10,7 +10,7 @@ COMPOSE_API  := docker compose -f compose.yaml -f compose.api-direct.yaml
 HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 
 .DEFAULT_GOAL := aide
-.PHONY: aide env config build up up-api up-frontend up-backend dev down logs ps \
+.PHONY: aide hooks verif-sous-modules env config build up up-api up-frontend up-backend dev down logs ps \
         migrate makemigrations check check-deploy shell dbshell \
         superuser provision seed purge-tokens \
         test test-backend test-frontend collect front-build \
@@ -22,6 +22,13 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 aide:
 	@grep -E '^[a-zA-Z-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+hooks: ## Installe les hooks Git versionnés (garde-fou des pointeurs de sous-module)
+	git config core.hooksPath .githooks
+	@echo "→ core.hooksPath = .githooks — le pre-commit vérifie les sous-modules."
+
+verif-sous-modules: ## Vérifie que les pointeurs de sous-module reflètent la réalité
+	@.githooks/pre-commit && echo "→ Pointeurs de sous-module cohérents."
 
 env: ## Crée .env à partir du modèle (ne l'écrase jamais)
 	@test -f .env || (cp .env.example .env && echo "→ .env créé : remplacer les 'change-me' avant `make up`")
