@@ -195,7 +195,18 @@ Rejouer les migrations n'est pas dangereux — elles sont idempotentes, une
 migration déjà appliquée est ignorée — mais c'est du temps perdu, et le
 redémarrage du backend coupe les requêtes en cours.
 
-### Email — vérification SPF/DKIM APRÈS déploiement
+### Email — vérification manuelle OBLIGATOIRE après déploiement
+
+> ## ⚠️ La suite de tests ne prouve rien sur l'envoi réel
+>
+> Les 14 tests d'email tournent sur le backend **`locmem`** : ils inspectent des
+> objets `EmailMessage` en mémoire. **Aucun** ne prouve que Gmail accepte la
+> connexion, que le mot de passe d'application est valide, que le `From` n'est
+> pas réécrit par le relais, ni que le `Reply-To` survit au transport.
+>
+> **C'est exactement le schéma de SQLite au jalon 1** : une suite verte sur un
+> substitut. La vérification ci-dessous n'est pas du polish — c'est la **seule
+> preuve réelle** que la chaîne fonctionne.
 
 Configuration : Google Workspace, `smtp.gmail.com:587` en TLS, authentifié par
 un **mot de passe d'application** (jamais le mot de passe du compte, jamais
@@ -205,16 +216,33 @@ committé — cf. `.env.example`).
 le domaine. Un expéditeur qui ne correspond pas au compte authentifié fait
 échouer SPF, et les messages atterrissent en indésirables — ou disparaissent.
 
-**Cette vérification est manuelle et ne peut pas être testée en CI** : aucun
-test ne peut constater ce que le serveur *récepteur* pense de notre domaine.
+#### Procédure
 
-1. déclencher un vrai envoi vers une adresse **Gmail** (approuver une demande
-   d'absence sur un compte de test) ;
-2. dans Gmail, ouvrir le message → menu ⋮ → **« Afficher l'original »** ;
-3. confirmer **`SPF : PASS`** *et* **`DKIM : PASS`**, tous deux sur
-   `sankoftechnologies.com` — pas sur un domaine d'infrastructure Google ;
-4. vérifier au passage l'en-tête `Reply-To` : il doit porter l'adresse de
-   contact de la chorale émettrice.
+**1. Envoi déclenché par une vraie action métier** — approuver une demande
+d'absence sur un compte de test, vers une adresse **Gmail**. Pas un `send_mail`
+depuis un shell : cela court-circuiterait le chemin réel (construction du
+sujet, Reply-To, provenance) et ne testerait que la connectivité.
+
+**2. Sur le message reçu**, contrôler :
+
+- le **`From` affiché** : `CHM Noreply`, **sans guillemets littéraux** autour du
+  nom. Une valeur à espaces mal citée dans `.env` produit un
+  `"CHM Noreply" <...>` affiché tel quel, guillemets compris — piège classique
+  du parsing d'environnement ;
+- le **`Reply-To`** : présent, et portant l'adresse de contact de la chorale
+  émettrice ;
+- la **provenance dans le sujet** : `[ChoirManager · <nom de la chorale>]`.
+
+**3. « Afficher l'original »** (menu ⋮ de Gmail) : confirmer **`SPF : PASS`**
+*et* **`DKIM : PASS`**, tous deux sur **`sankoftechnologies.com`** — pas sur un
+domaine d'infrastructure Google.
+
+**4. Cas `email_contact` vide** — à faire **avant** de renseigner toutes les
+chorales, sinon le cas devient intestable sans remettre une adresse à zéro.
+Déclencher un envoi depuis une chorale sans adresse de contact et vérifier sur
+le message reçu : **aucun en-tête `Reply-To`**, et la phrase de pied
+« Cette adresse ne reçoit pas de réponses. Contactez le bureau de votre
+chorale. » réellement affichée.
 
 > ⚠️ **La console Workspace peut afficher DKIM comme actif alors que
 > l'enregistrement DNS n'a pas propagé.** C'est le message reçu qui fait foi,
