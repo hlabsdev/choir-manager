@@ -9,7 +9,7 @@ répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
 **État** : jalon 4 (multi-chorale frontend) figé au tag `v1.1.0-rc.2`. Backend et
-frontend passent respectivement ~262 et ~87 tests. PostgreSQL 17 sous Docker
+frontend passent respectivement ~276 et ~87 tests. PostgreSQL 17 sous Docker
 Compose (`compose.yaml` prod-like, `compose.dev.yaml` pour l'itération) — voir
 [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
@@ -65,7 +65,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~262 tests)
+pytest -q                           # suite complète (~276 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...

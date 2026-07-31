@@ -195,6 +195,36 @@ Rejouer les migrations n'est pas dangereux — elles sont idempotentes, une
 migration déjà appliquée est ignorée — mais c'est du temps perdu, et le
 redémarrage du backend coupe les requêtes en cours.
 
+### Email — vérification SPF/DKIM APRÈS déploiement
+
+Configuration : Google Workspace, `smtp.gmail.com:587` en TLS, authentifié par
+un **mot de passe d'application** (jamais le mot de passe du compte, jamais
+committé — cf. `.env.example`).
+
+`DEFAULT_FROM_EMAIL` doit désigner un compte réellement autorisé à envoyer pour
+le domaine. Un expéditeur qui ne correspond pas au compte authentifié fait
+échouer SPF, et les messages atterrissent en indésirables — ou disparaissent.
+
+**Cette vérification est manuelle et ne peut pas être testée en CI** : aucun
+test ne peut constater ce que le serveur *récepteur* pense de notre domaine.
+
+1. déclencher un vrai envoi vers une adresse **Gmail** (approuver une demande
+   d'absence sur un compte de test) ;
+2. dans Gmail, ouvrir le message → menu ⋮ → **« Afficher l'original »** ;
+3. confirmer **`SPF : PASS`** *et* **`DKIM : PASS`**, tous deux sur
+   `sankoftechnologies.com` — pas sur un domaine d'infrastructure Google ;
+4. vérifier au passage l'en-tête `Reply-To` : il doit porter l'adresse de
+   contact de la chorale émettrice.
+
+> ⚠️ **La console Workspace peut afficher DKIM comme actif alors que
+> l'enregistrement DNS n'a pas propagé.** C'est le message reçu qui fait foi,
+> pas la console. Refaire le contrôle si l'enregistrement a été posé moins de
+> 48 h auparavant.
+
+Si `SPF : PASS` mais `DKIM : NEUTRAL` ou absent : la clé DKIM n'est pas publiée
+ou pas encore propagée. Les messages partent, mais leur réputation est
+mauvaise — à corriger avant d'ouvrir le pilote à de vrais membres.
+
 ### Purge des refresh tokens — À PLANIFIER
 
 Depuis l'activation de `rest_framework_simplejwt.token_blacklist`, **chaque

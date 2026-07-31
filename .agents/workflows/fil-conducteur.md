@@ -21,7 +21,7 @@ vérifié et documenté.
 | Dernier jalon livré | Jalon 4 — passage 1:N frontend (`v1.1.0-rc.2`) |
 | Jalon en cours | Jalon 5 — déploiement + sauvegardes testées |
 | Base de données | PostgreSQL 17 sous Docker Compose |
-| Tests backend | 262 (`pytest -q`) |
+| Tests backend | 276 (`pytest -q`) |
 | Tests frontend | 87 (Vitest) |
 | Feuille de route détaillée | `docs/choirmanager_feuille_de_route_v2.md` |
 | Runbook d'exploitation | `docs/DEPLOIEMENT.md` |
