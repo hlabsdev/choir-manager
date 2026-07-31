@@ -1,6 +1,6 @@
 ---
 description: Source unique de l'état réel, du prochain jalon et de l'ordre de travail de ChoirManager
-updated: 2026-07-26
+updated: 2026-07-31
 ---
 
 # ChoirManager — Fil conducteur global
@@ -21,8 +21,8 @@ vérifié et documenté.
 | Dernier jalon livré | Jalon 4 — passage 1:N frontend (`v1.1.0-rc.2`) |
 | Jalon en cours | Jalon 5 — déploiement + sauvegardes testées |
 | Base de données | PostgreSQL 17 sous Docker Compose |
-| Tests backend | 260 (`pytest -q`) |
-| Tests frontend | 82 (Vitest) |
+| Tests backend | 262 (`pytest -q`) |
+| Tests frontend | 87 (Vitest) |
 | Feuille de route détaillée | `docs/choirmanager_feuille_de_route_v2.md` |
 | Runbook d'exploitation | `docs/DEPLOIEMENT.md` |
 
@@ -255,23 +255,37 @@ email, avec jeton à usage unique). C'est à ce moment-là que l'ensemble doit �
 repris proprement — plan, modèle de menace, validation par mutation — et
 **non traité comme un acquis** parce qu'un mécanisme existe déjà.
 
-### Bloc suivant — `BLACKLIST_AFTER_ROTATION`
+#### Bloc 2 — bannissement à la rotation ✅ FAIT
 
-Volontairement **non traité** avec le bloc 1, pour ne pas mélanger deux
-décisions dans un même changement.
+`BLACKLIST_AFTER_ROTATION` passe à `True` (`2e7bc82`, `324cda0`). Un refresh
+intercepté cesse d'être exploitable dès que le titulaire légitime l'a fait
+tourner ; auparavant il restait rejouable jusqu'à expiration, 7 jours. Traité
+AVANT le SMTP, qui produira des tokens depuis un lien email interceptable.
 
-Configuration actuelle : `ROTATE_REFRESH_TOKENS=True`,
-`BLACKLIST_AFTER_ROTATION=False`. Conséquence : un refresh **intercepté reste
-rejouable après sa rotation naturelle** par le titulaire légitime. L'attaquant
-qui a capté un refresh peut s'en servir même après que la victime l'a fait
-tourner, jusqu'à expiration.
+**Ce durcissement créait une régression, corrigée dans le même bloc.** Le verrou
+de refresh du front est porté par l'instance du service, donc par onglet, alors
+que `localStorage` est partagé : deux onglets rafraîchissant dans la même
+fenêtre (~200 ms) voyaient le second présenter un jeton déjà banni. Comme
+`logout()` efface le stockage partagé, les DEUX onglets tombaient.
+`AuthService.rattraperCourseEntreOnglets()` distingue « mon jeton a été tourné
+par un frère » (une reprise) de « mon jeton est mort » (déconnexion), et trace
+chaque occurrence en `console.warn` — à surveiller pendant le pilote.
 
-L'activation est quasi gratuite maintenant que l'app blacklist est en place
-(même mécanisme, un booléen). Ni urgent, ni cosmétique. Un test fige aujourd'hui
-le comportement actuel
-(`authentication/tests/test_revocation_sessions.py::test_un_refresh_deja_tourne_reste_rejouable`)
-pour que le durcissement soit un choix explicite et non un effet de bord — ce
-test sera à mettre à jour, et cette entrée à retirer, le jour où on l'active.
+**Choix de conception acté** : un changement de chorale **n'invalide pas**
+l'ancien refresh. `switch-chorale/`, `rejoindre-avec-mon-compte/` et
+`mes-invitations/{id}/accepter/` ne reçoivent aucun refresh en entrée — le
+serveur ignore lequel le client détient et ne peut donc pas le bannir. C'est
+acceptable parce que `chorale_active` revérifie l'appartenance vivante à chaque
+requête : ce sont plusieurs sessions légitimes du même compte, pas une session
+fantôme survivant à une révocation. Révoquer toutes les sessions à chaque
+changement de chorale serait pire — on déconnecterait les autres appareils pour
+un simple changement de contexte. Verrouillé par
+`test_un_switch_de_chorale_n_invalide_PAS_l_ancien_refresh`.
+
+**Volume** : chaque rotation crée désormais 2 lignes au lieu d'1. Sur un pilote
+réaliste, ~160 lignes/jour, ~1 100 sur les 7 jours de rétention. La purge
+quotidienne reste suffisante, aucun ajustement. `flushexpiredtokens` nettoie les
+deux tables (CASCADE).
 
 ### Reste du jalon 5
 

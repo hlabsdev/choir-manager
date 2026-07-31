@@ -9,7 +9,7 @@ répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
 **État** : jalon 4 (multi-chorale frontend) figé au tag `v1.1.0-rc.2`. Backend et
-frontend passent respectivement ~260 et ~82 tests. PostgreSQL 17 sous Docker
+frontend passent respectivement ~262 et ~87 tests. PostgreSQL 17 sous Docker
 Compose (`compose.yaml` prod-like, `compose.dev.yaml` pour l'itération) — voir
 [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
@@ -50,7 +50,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~260 tests)
+pytest -q                           # suite complète (~262 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
@@ -67,7 +67,7 @@ dev), `WEASYPRINT_DLL_DIR` (GTK sous Windows, pour l'export PDF).
 npm run start        # tailwind build (une fois) + ng serve, http://localhost:4200
 npm run start:dev    # tailwind --watch en tâche de fond + ng serve
 npm run build        # tailwind build + ng build
-npm test             # Vitest (~82 tests)
+npm test             # Vitest (~87 tests)
 ```
 Tailwind v4 n'est **pas** branché sur le pipeline esbuild d'Angular — il est
 compilé explicitement via son CLI avant chaque serve/build. Si les styles
