@@ -287,6 +287,40 @@ réaliste, ~160 lignes/jour, ~1 100 sur les 7 jours de rétention. La purge
 quotidienne reste suffisante, aucun ajustement. `flushexpiredtokens` nettoie les
 deux tables (CASCADE).
 
+### Décisions ouvertes — pointage et permissions
+
+Constaté au test manuel du bloc SMTP : une permission **approuvée** qui
+chevauche un jour de répétition n'a **aucun effet** sur le pointage.
+
+Trois faits établis en lisant le modèle :
+
+- `Presence.StatutPresence.PERMISSION` existe depuis l'origine mais **aucun
+  code ne l'écrit jamais** — seul `rapports/services.py` le lit. Code mort ;
+- `PermissionRequest` porte une plage `date_debut`/`date_fin` ET une FK
+  `repetition` optionnelle : le chevauchement se calcule sur la plage ;
+- `taux_presence = (present + retard) / total` : une permission compte au
+  **dénominateur** sans compter au numérateur.
+
+**Décision 1 — pré-remplir, pas décider.** L'écran de pointage propose
+`permission` comme statut par défaut pour les membres couverts par une
+permission approuvée, de façon VISIBLE, et le maître de chœur confirme ou
+corrige. Ni auto-marquage aveugle, ni double saisie.
+
+Motif : une permission approuvée dit « j'ai demandé à m'absenter », pas « je me
+suis absenté ». On peut obtenir une permission et venir quand même. Un
+auto-marquage inscrirait une prédiction dans un registre qui sert de trace de
+ce qui a été **constaté**.
+
+Deux garde-fous indissociables : ne JAMAIS écraser un pointage existant (une
+permission approuvée après coup ne doit pas effacer une observation), et rendre
+le pré-remplissage visible — sinon le MDC valide sans savoir quoi.
+
+**Décision 2 — À TRANCHER : les permissions au dénominateur du taux ?**
+Aujourd'hui, un choriste qui prévient et obtient l'accord du Bureau voit son
+taux baisser exactement comme celui qui ne vient pas sans rien dire. C'est une
+décision de politique, pas d'implémentation. Elle conditionne aussi les
+rapports et le tableau de bord.
+
 ### Reste du jalon 5
 
 SMTP (et le reset par email qu'il débloque), sauvegardes testées, CI/CD,
