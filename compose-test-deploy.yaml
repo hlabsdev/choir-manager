@@ -1,0 +1,22 @@
+services:
+  db:
+    container_name: chm-db
+    networks: [interne]          # jamais sur mrs-gateway
+
+  backend:
+    container_name: chm-backend
+    networks: [interne]
+    volumes:
+      - /srv/chm/media:/app/media    # écriture
+
+  frontend:
+    container_name: chm-frontend
+    networks: [interne, mrs-gateway]
+    volumes:
+      - /srv/chm/media:/usr/share/nginx/media:ro   # lecture, via X-Accel-Redirect
+    # plus aucune section "ports:"
+
+networks:
+  interne:
+  mrs-gateway:
+    external: true

@@ -584,6 +584,56 @@ Implémente, avec tests obligatoires :
 Contraintes : backend uniquement. Plan avant code. Ne commit pas.
 ```
 
+### Paln de Sauvegarde:
+```markdown
+Jalon 5, bloc sauvegardes. PHASE 1 — PLAN, ne code rien.
+
+Contexte de séquence : le VPS n'existe pas encore. Cette session écrit et teste
+la procédure en local (Docker), mais la vérification qui compte sera la
+re-exécution sur l'hôte réel au déploiement. Écris la procédure pour être
+rejouable ailleurs, pas pour marcher ici.
+
+À instruire :
+
+1. Périmètre. Le dump Postgres ne suffit pas : les médias (photos de membres,
+   partitions PDF) vivent sur disque. Une restauration qui rend la base mais
+   pas les fichiers n'est pas une restauration. Dis-moi ce qui doit être
+   sauvegardé exactement, et où ça vit aujourd'hui.
+
+2. Destination SÉPARÉE. Une sauvegarde sur la même machine que la base ne
+   protège de rien (perte du VPS = perte des deux). Propose une cible externe
+   (R2, Backblaze B2) et dis où vivront ses identifiants — ce sont des secrets
+   réels, comme l'app password.
+
+3. Contenu personnel. Les dumps contiennent 36 personnes réelles avec noms,
+   téléphones, emails. Traite-les comme tels : chiffrement au repos côté
+   destination, et rétention bornée (dis-moi combien de temps et pourquoi).
+
+4. LE POINT CENTRAL — le test de restauration. Le livrable de ce bloc n'est
+   pas un pg_dump qui tourne, c'est une restauration vérifiée. Écris une
+   procédure qui :
+   - restaure dans une base NEUVE (conteneur jetable), jamais sur la base
+     vivante ;
+   - vérifie le CONTENU, pas le code de sortie : nombre de chorales, de
+     membres, de mandats actifs, présence des médias, et une requête métier
+     qui prouve que les relations tiennent ;
+   - est scriptée et rejouable, pas une liste d'étapes manuelles.
+
+5. Échec silencieux. Une sauvegarde qui cesse de tourner sans bruit est le
+   mode de défaillance classique — on ne le découvre qu'au moment où on en a
+   besoin. Comment saurai-je qu'elle a tourné hier ? Propose le mécanisme le
+   plus simple qui fonctionne (fichier témoin daté vérifié, ping vers un
+   service de monitoring, email en cas d'échec — tu as maintenant du SMTP).
+   Pas de solution lourde.
+
+6. Documente le tout dans le runbook, avec la procédure de restauration
+   d'urgence écrite pour quelqu'un qui panique à 2h du matin : commandes
+   exactes, dans l'ordre, sans réflexion à faire.
+
+Plan d'abord.
+```
+
+
 ## Jalon 6 — Pilote
 
 4 à 6 semaines, **une seule chorale : la tienne**. Vraies répétitions, vrai

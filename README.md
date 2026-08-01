@@ -38,6 +38,10 @@ Git.
 | Backend figé par le jalon | `a41ddb8` |
 | Frontend figé par le jalon | `07c9e94` |
 
+## Site en ligne
+
+Une instance de démonstration est accessible à l'adresse : https://choirmanager.sankof.tech/
+
 Le périmètre du jalon est décrit dans [RELEASE_NOTES.md](RELEASE_NOTES.md). Le
 travail à venir et ses critères de sortie sont centralisés dans
 [.agents/workflows/fil-conducteur.md](.agents/workflows/fil-conducteur.md).
