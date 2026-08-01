@@ -41,10 +41,24 @@ jobs:
           --health-timeout 5s
           --health-retries 12
 
+      # Un vrai Redis, pas le repli LocMem : les compteurs de throttle sont un
+      # mécanisme de sécurité, et une suite qui les valide sur un cache
+      # par-processus ne prouverait rien du comportement réel en production.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
     env:
       # Le rôle de CI doit pouvoir créer et détruire la base de test Django.
       # Ce privilège ne doit PAS être accordé au rôle applicatif de production.
       DATABASE_URL: postgresql://choirmanager:choirmanager-ci@localhost:5432/choirmanager
+      REDIS_URL: redis://localhost:6379/0
       DJANGO_SECRET_KEY: ci-only-not-a-production-secret
       DJANGO_DEBUG: "False"
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
@@ -89,13 +103,13 @@ jobs:
       # DISPARITION de tests, pas interdire d'en retirer un en refactorisant.
       # À relever quand la suite progresse durablement — sinon il cesse de
       # mordre et devient décoratif.
-      - name: Baseline — au moins 270 tests collectés
+      - name: Baseline — au moins 340 tests collectés
         working-directory: chm-backend
         run: |
           total=$(pytest --collect-only -q | tail -1 | grep -oE '^[0-9]+')
           echo "Tests collectés : $total"
-          if [ "$total" -lt 270 ]; then
-            echo "::error::Régression de couverture : $total tests collectés, minimum attendu 270."
+          if [ "$total" -lt 340 ]; then
+            echo "::error::Régression de couverture : $total tests collectés, minimum attendu 340."
             exit 1
           fi
 

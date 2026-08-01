@@ -47,6 +47,51 @@ services:
     networks: [chm]
 
   # --------------------------------------------------------------------------
+  # Cache — support des compteurs de throttle
+  # --------------------------------------------------------------------------
+  # Ce service n'est PAS un accélérateur : il porte les compteurs de throttle,
+  # qui sont un mécanisme de sécurité. Sur le LocMemCache par défaut de Django
+  # ils vivent dans chaque worker Gunicorn, donc chaque limite annoncée vaut
+  # jusqu'à GUNICORN_WORKERS fois sa valeur. Cf. chm-backend/chm_config/env.py.
+  redis:
+    container_name: choirmanager-redis
+    image: redis:7-alpine          # version majeure figée, comme PostgreSQL
+    restart: unless-stopped
+    # ÉPHÉMÈRE, volontairement : aucun volume.
+    #  - un cache perdu au redémarrage n'est pas une perte de données ;
+    #  - des compteurs de throttle restaurés seraient PÉRIMÉS, pas utiles ;
+    #  - surtout, les clés contiennent des IP et des identifiants tentés. Les
+    #    écrire sur disque créerait une surface de données personnelles à
+    #    sauvegarder, chiffrer et purger, sans le moindre bénéfice.
+    # `--save ""` et `--appendonly no` désactivent explicitement les deux
+    # mécanismes de persistance : l'image active RDB par défaut.
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-128mb}
+      # Le cache doit continuer d'accepter des écritures une fois plein plutôt
+      # que de renvoyer des erreurs : `allkeys-lru` évince la clé la plus
+      # ancienne. Avec `noeviction` (défaut), un Redis saturé ferait échouer
+      # l'enregistrement des compteurs — donc laisserait passer les requêtes.
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    # Aucun port publié : joignable seulement depuis le réseau Compose, comme
+    # la base. C'est ce qui justifie l'absence de mot de passe — la même
+    # posture que PostgreSQL ici. Publier ce port exigerait `--requirepass`.
+    stop_grace_period: 10s
+    networks: [chm]
+
+  # --------------------------------------------------------------------------
   # Migrations — service one-shot
   # --------------------------------------------------------------------------
   migrate:
@@ -68,8 +113,22 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # `migrate` n'utilise pas le cache, mais `manage.py` charge les settings,
+      # donc résout REDIS_URL. Attendre ici évite un échec de démarrage dont la
+      # cause serait ailleurs que dans les migrations.
+      redis:
+        condition: service_healthy
     environment: &django_env
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL manquante}
+      # Obligatoire : sans elle, le démarrage échoue plutôt que de retomber en
+      # silence sur un cache par-worker (cf. env.py::resoudre_cache). Le nom du
+      # service Compose fait office d'hôte sur le réseau interne.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Proxys de confiance devant Django. `1` = la topologie de CE fichier
+      # (client → nginx frontend → backend). Toute autre topologie doit être
+      # MESURÉE sur l'hôte réel avant d'activer les throttles — procédure
+      # bloquante, cf. docs/DEPLOIEMENT.md §« Mesurer NUM_PROXIES ».
+      DJANGO_NUM_PROXIES: ${DJANGO_NUM_PROXIES:-1}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY manquante}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?DJANGO_ALLOWED_HOSTS manquants}
@@ -110,6 +169,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy   # les throttles sans cache partagé ne protègent rien
       migrate:
         condition: service_completed_successfully   # ne démarre pas si migrate échoue
     environment:
