@@ -87,6 +87,50 @@ Deux tests structurels (`core/tests/test_resolution_tenant_interne.py`) ferment
 les classes de régression qui se reproduisent à chaque nouveau ViewSet : lecture
 d'un attribut de tenant supprimé, et création directe de `Membre`.
 
+### Règle permanente — toute garde structurelle embarque sa propre mutation
+
+**Une garde qui ne sait pas échouer ne garde rien.** Ce n'est pas une crainte
+théorique : c'est le motif le plus répété du projet. Quatre gardes successives
+se sont révélées partiellement ou totalement décoratives, chacune verte et
+rassurante pendant des semaines :
+
+| Garde | Ce qu'elle prétendait | Ce qu'elle faisait réellement |
+| --- | --- | --- |
+| Baseline de tests (CI) | arrêter une régression de couverture | seuil laissé à 270 pour une suite à 346 — n'aurait pas vu disparaître 70 tests |
+| Contrôle AST | interdire un motif de code | ne couvrait pas les chemins réels |
+| Hook pre-commit sous-modules | refuser un pointeur incohérent | `GIT_DIR` hérité rendait `git -C` muet : validait TOUT à sa première écriture |
+| Garde des permissions (lot 1) | aucun ViewSet en `IsAuthenticated` nu | `if not resolues: continue` exemptait `permission_classes = ()`, le cas le PLUS ouvert — les vues JWT n'ont jamais été inspectées |
+
+Le point commun n'est pas la négligence : dans les quatre cas la garde était
+écrite sérieusement, et son silence était indiscernable d'un succès.
+
+**Donc, pour toute nouvelle garde structurelle, sans exception :**
+
+1. **Un test qui prouve que la garde DÉTECTE.** On lui soumet un cas
+   délibérément cassé et on exige qu'elle le signale. Permanent, dans le même
+   fichier — pas une vérification manuelle faite une fois à la relecture.
+2. **Un test qui prouve que la garde REGARDE quelque chose.** Un recensement
+   qui renvoie une liste vide valide tout : il faut donc affirmer un volume
+   minimal ET la présence nommée de cas connus.
+3. **Aucune branche `continue`/`skip` silencieuse.** Tout cas écarté est écarté
+   par une allowlist explicite et motivée par écrit, jamais par une condition
+   incidente. Une entrée d'allowlist sans raison est une entrée de convenance.
+4. **Pas de repli en cas d'erreur.** Une garde qui rattrape une exception pour
+   retomber sur une valeur par défaut rapporte le mauvais coupable — vécu au
+   lot 2, où un `except` transformait un import manquant en « permissions :
+   IsAuthenticated ».
+
+Référence d'implémentation : `chm-backend/core/tests/test_garde_permissions.py`,
+qui porte les quatre points.
+
+**Corollaire, appris au lot 2 :** une garde ne vaut que si elle s'exécute dans
+les conditions réelles. Toute la pile de sécurité du lot 2 était verte — 346
+tests, 13/13 mutations rouges — alors que le paquet `redis` n'était pas
+installé et que tout tournait sur un cache par-processus. Le défaut n'est
+apparu qu'en branchant un vrai Redis. Quand un mécanisme dépend d'une
+infrastructure (base, cache, SMTP), la valider contre un substitut ne prouve
+rien de la production : c'est le piège SQLite du jalon 1, transposé au cache.
+
 ## 5. Jalon 4 — Passage 1:N frontend (LIVRÉ)
 
 ### Objectif

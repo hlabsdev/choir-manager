@@ -114,6 +114,7 @@ peut résulter de l'oubli d'une variable.**
 | `CORS_ALLOW_ALL_ORIGINS` | `True` | `False` |
 | `CORS_ALLOWED_ORIGINS` | origines `ng serve` | vide |
 | `DATABASE_URL` | repli SQLite explicite | **démarrage refusé** |
+| `REDIS_URL` | repli LocMem explicite | **démarrage refusé** |
 | `DJANGO_COOKIE_SECURE` | sans objet | `True` |
 
 Deux refus supplémentaires, volontairement bruyants :
@@ -128,6 +129,88 @@ Deux refus supplémentaires, volontairement bruyants :
   façon pas nécessaire.
 
 Un démarrage qui échoue affiche le nom exact de la variable manquante.
+
+### ⛔ ÉTAPE BLOQUANTE — mesurer `DJANGO_NUM_PROXIES` sur l'hôte réel
+
+**N'activez pas les throttles en production avant d'avoir mesuré cette valeur
+sur la machine cible.** Ce n'est pas une précaution de style : une valeur
+fausse casse la protection dans un sens ou dans l'autre, et les deux échouent
+en silence.
+
+`DJANGO_NUM_PROXIES` indique combien de proxys de confiance se trouvent entre
+le client et Django. DRF s'en sert pour lire l'IP réelle du client dans
+`X-Forwarded-For`, et **c'est cette valeur qui décide de la validité de tous
+les plafonds par IP** (connexion, rafraîchissement, demande de chorale, codes
+d'invitation).
+
+| Réglage | Ce que Django lit | Conséquence |
+| --- | --- | --- |
+| **trop haut** | une adresse que le client a lui-même écrite | plafonds **contournables** : il suffit de changer d'en-tête |
+| **trop bas** | l'IP d'un proxy, identique pour tout le monde | plafonds **partagés** : quelques échecs bloquent toute la plateforme |
+| **exact** | l'IP réelle du client | correct |
+
+Il n'existe donc pas de valeur « prudente ». `1` est le défaut, qui correspond
+à la topologie de `compose.yaml` (client → nginx frontend → backend). Toute
+autre topologie — notamment une passerelle mutualisée en amont — doit être
+mesurée.
+
+**Procédure.** Pile démarrée, depuis une machine EXTÉRIEURE au serveur (pas
+depuis l'hôte lui-même, dont l'IP ne traverserait pas la passerelle) :
+
+```bash
+# 1. Relever votre IP publique, vue depuis l'extérieur.
+curl -s https://api.ipify.org ; echo
+```
+
+Puis sur l'hôte, faire raconter à Django ce qu'il reçoit réellement :
+
+```bash
+# 2. Afficher la chaîne X-Forwarded-For telle qu'elle arrive au backend.
+docker compose exec backend python -c "
+import django, os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'chm_config.settings')
+django.setup()
+from django.conf import settings
+print('NUM_PROXIES actuellement configuré :', settings.REST_FRAMEWORK['NUM_PROXIES'])
+"
+
+# 3. Émettre une requête depuis l'extérieur et lire la chaîne reçue.
+#    Les logs d'accès Gunicorn ne la montrent pas : on la fait dire par l'API.
+docker compose logs --tail=50 backend | grep -i forwarded
+```
+
+Si l'en-tête n'apparaît pas dans les journaux, le plus simple est de le
+demander à l'application le temps d'une mesure — depuis l'extérieur :
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://VOTRE-DOMAINE/api/core/health/
+```
+
+puis sur l'hôte :
+
+```bash
+docker compose exec backend python -c "
+import django, os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE','chm_config.settings')
+django.setup()
+from django.test import RequestFactory
+from rest_framework.throttling import AnonRateThrottle
+# Reproduire la chaîne observée dans les journaux nginx, puis vérifier
+# quelle adresse DRF en extrait avec le réglage courant :
+chaine = 'VOTRE.IP.PUBLIQUE, 10.0.0.5'   # ← à remplacer par la chaîne réelle
+r = RequestFactory().get('/', HTTP_X_FORWARDED_FOR=chaine, REMOTE_ADDR='172.18.0.4')
+print('DRF retient :', AnonRateThrottle().get_ident(r))
+"
+```
+
+**Règle de décision :** `DJANGO_NUM_PROXIES` est le **nombre d'adresses de la
+chaîne `X-Forwarded-For` reçue par le backend**. `DRF retient` doit afficher
+exactement l'IP publique relevée à l'étape 1 — ni celle d'une passerelle, ni
+une valeur que vous auriez pu injecter. Ajustez la variable dans `.env`,
+redémarrez, et **re-mesurez** avant d'ouvrir la pile au public.
+
+Contrôle final, depuis l'extérieur : deux machines d'IP publiques différentes
+doivent pouvoir échouer chacune leur connexion sans se bloquer mutuellement.
 
 ### Cookies et pile locale en HTTP
 

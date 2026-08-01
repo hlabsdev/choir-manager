@@ -168,3 +168,8 @@ nettoyage-jetable: ## DESTRUCTIF : supprime aussi les volumes. Environnement jet
 	@read -p "Taper 'jetable' pour confirmer : " reponse; \
 	  test "$$reponse" = "jetable" || (echo "Annulé." && false)
 	$(COMPOSE) down -v
+
+smoke-medias: ## Vérifie les médias privés À TRAVERS NGINX (pile démarrée requise)
+	@echo "Les tests Django ne passent pas par Nginx : ils prouvent que Django émet"
+	@echo "X-Accel-Redirect, pas que Nginx sert le fichier. Ce contrôle ferme l'écart."
+	@bash scripts/smoke-medias.sh
