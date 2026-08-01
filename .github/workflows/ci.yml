@@ -103,13 +103,13 @@ jobs:
       # DISPARITION de tests, pas interdire d'en retirer un en refactorisant.
       # À relever quand la suite progresse durablement — sinon il cesse de
       # mordre et devient décoratif.
-      - name: Baseline — au moins 340 tests collectés
+      - name: Baseline — au moins 355 tests collectés
         working-directory: chm-backend
         run: |
           total=$(pytest --collect-only -q | tail -1 | grep -oE '^[0-9]+')
           echo "Tests collectés : $total"
-          if [ "$total" -lt 340 ]; then
-            echo "::error::Régression de couverture : $total tests collectés, minimum attendu 340."
+          if [ "$total" -lt 355 ]; then
+            echo "::error::Régression de couverture : $total tests collectés, minimum attendu 355."
             exit 1
           fi
 
