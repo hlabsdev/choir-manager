@@ -119,7 +119,10 @@ services:
       redis:
         condition: service_healthy
     environment: &django_env
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL manquante}
+      # Compose ne développe pas récursivement les ${...} contenus dans une
+      # valeur du fichier .env. Construire l'URL ici évite de transmettre
+      # littéralement "${POSTGRES_USER}" à Django après une recréation.
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER manquant}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}@db:5432/${POSTGRES_DB:?POSTGRES_DB manquant}
       # Obligatoire : sans elle, le démarrage échoue plutôt que de retomber en
       # silence sur un cache par-worker (cf. env.py::resoudre_cache). Le nom du
       # service Compose fait office d'hôte sur le réseau interne.
