@@ -26,6 +26,9 @@ backups/
 .docker/
 volumes/
 
+# Imports opérationnels contenant des données personnelles réelles.
+docs/membres_*.csv
+
 # Fichiers système
 .DS_Store
 Thumbs.db
