@@ -1,6 +1,6 @@
 ---
 description: Source unique de l'état réel, du prochain jalon et de l'ordre de travail de ChoirManager
-updated: 2026-07-31
+updated: 2026-08-02
 ---
 
 # ChoirManager — Fil conducteur global
@@ -16,13 +16,14 @@ vérifié et documenté.
 
 | Élément | Valeur |
 | --- | --- |
-| Date du constat | 26 juillet 2026 |
-| Stade produit | MVP fonctionnel, multi-chorale backend **et** frontend |
-| Dernier jalon livré | Jalon 4 — passage 1:N frontend (`v1.1.0-rc.2`) |
-| Jalon en cours | Jalon 5 — déploiement + sauvegardes testées |
-| Base de données | PostgreSQL 17 sous Docker Compose |
-| Tests backend | 276 (`pytest -q`) |
-| Tests frontend | 87 (Vitest) |
+| Date du constat | 2 août 2026 |
+| Stade produit | **EN PRODUCTION** — pilote ouvert à la première chorale réelle |
+| URL | https://choirmanager.sankof.tech (VPS Sankof, derrière `mrs-gateway`) |
+| Dernier jalon livré | Jalon 5 — durcissement sécurité + déploiement (`v1.2.0-rc.3`) |
+| Jalon en cours | Pilote — retours du terrain, aucun lot bloquant restant |
+| Base de données | PostgreSQL 17 **et Redis** sous Docker Compose |
+| Tests backend | 361 (`pytest -q`) |
+| Tests frontend | 113 (Vitest) |
 | Feuille de route détaillée | `docs/choirmanager_feuille_de_route_v2.md` |
 | Runbook d'exploitation | `docs/DEPLOIEMENT.md` |
 
@@ -44,8 +45,8 @@ En cas de contradiction, appliquer cet ordre :
 | 2 | Cloisonnement opérateur / administrateur de tenant | `v1.0.0-mvp.3` | livré |
 | 3 | Passage 1:N — backend | `v1.1.0-rc.1` | livré |
 | 4 | Passage 1:N — frontend | `v1.1.0-rc.2` | **livré** |
-| 5 | Déploiement + sauvegardes testées | — | à venir |
-| 6 | Pilote réel 4–6 semaines, une seule chorale | `v1.1.0` | à venir |
+| 5 | Durcissement sécurité (3 lots) + déploiement + sauvegardes | `v1.2.0-rc.3` | **livré** |
+| 6 | Pilote réel 4–6 semaines, une seule chorale | `v1.2.0` | **en cours** |
 
 ## 3. Architecture à préserver
 
@@ -465,11 +466,49 @@ Ordre imposé pour toute modification applicative :
 Ne jamais committer un fichier applicatif depuis la racine. `git status` à la
 racine ne montre que les pointeurs : utiliser `git -C chm-backend status`.
 
-## 10. Après le pilote
+## 10. Pendant le pilote — lots NON bloquants
 
-Backlog, à prioriser depuis les retours d'usage uniquement : PWA et partitions
-hors ligne, calendrier externe, notifications push/SMS, enregistrements
-audio/vidéo, module Activités/Planning, application native.
+Aucun de ces lots n'empêche la chorale d'utiliser l'outil : ils se traitent
+**en parallèle** du pilote. L'ordre ci-dessous est celui du risque décroissant,
+pas celui de la difficulté.
+
+### D'abord — ce qui conditionne la suite
+
+| # | Lot | Pourquoi maintenant |
+| --- | --- | --- |
+| 1 | **Test 401 intermittent** (`chm-backend#1`) | ⚠️ **Avant plusieurs chorales simultanées.** Tant qu'il vit, une vraie régression passera pour « encore le test flaky ». Piste instruite : threads + `django_db(transaction=True)` qui tronque la base au teardown — cf. le commentaire de l'issue. |
+| 2 | **Identité / email vérifié** | Prérequis du reset self-service : email facultatif, non vérifié, unicité insensible à la casse absente. Poser le reset sur cette base serait un chemin de reprise de compte. |
+| 3 | **Reset self-service** | Le manque le plus visible pour l'usager : `changer-mot-de-passe` exige l'ancien, donc ne sert pas à qui l'a perdu. Aujourd'hui seul le Bureau dépanne, et seulement pour un compte mono-chorale. |
+| 4 | **`must_change_password`** | Un mot de passe temporaire du Bureau reste valable indéfiniment. Complète le lot 3. |
+
+### Ensuite — durcissement complémentaire
+
+| # | Lot | Note |
+| --- | --- | --- |
+| 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Nginx pose déjà plusieurs en-têtes, pas de CSP. |
+| 6 | **`CHECK_REVOKE_TOKEN`** | Lie la validité du JWT au hash du mot de passe et ramène la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
+| 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. |
+| 8 | **Journal d'audit** | Connexions échouées, resets, changements de rôle, opérations financières, accès opérateur. |
+| 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
+| 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Plus audit de vulnérabilités en CI. |
+
+### Et la première demande du terrain
+
+**Module Médias du répertoire (audio).** Réutilise la mécanique `TypeMedia` du
+lot 3 : le geste attendu est d'enregistrer un `TypeMedia` dans
+`core/medias.py::REGISTRE` et rien d'autre. `MIMES_AUDIO` y est déjà déclaré
+pour ça. Si écrire ce module demande de toucher `core/views_medias.py`, c'est
+que l'abstraction du lot 3 a échoué — le constater serait en soi une
+information.
+
+Côté front, une piste audio protégée se consomme comme une image : par
+`HttpClient` puis blob, jamais par un `src` direct (cf. `MediaProtegeDirective`).
+
+### Backlog de fond
+
+À prioriser depuis les retours d'usage uniquement : PWA et partitions hors
+ligne, calendrier externe, notifications push/SMS, module Activités/Planning,
+application native.
 
 ## 11. Règle de mise à jour
 

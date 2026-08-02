@@ -8,10 +8,22 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : jalon 4 (multi-chorale frontend) figé au tag `v1.1.0-rc.2`. Backend et
-frontend passent respectivement ~276 et ~87 tests. PostgreSQL 17 sous Docker
-Compose (`compose.yaml` prod-like, `compose.dev.yaml` pour l'itération) — voir
-[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.2.0-rc.3`, sur
+https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
+`mrs-gateway`). Pilote ouvert à la première chorale réelle. Backend et frontend
+passent respectivement ~361 et ~113 tests.
+
+PostgreSQL 17 **et Redis** sous Docker Compose. Trois piles :
+`compose.yaml` (base, prod-like), `+ compose.dev.yaml` (itération),
+`+ compose.prod.yaml` (VPS). Sur le serveur, **toujours les cibles `make
+prod-*`** : les cibles de développement omettent `compose.prod.yaml`, ce qui
+republierait le port 8080 en clair. Voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md)
+et [docs/deploiement_pile_complete.md](docs/deploiement_pile_complete.md).
+
+⚠️ `REDIS_URL` est **obligatoire** hors DEBUG : le cache porte les compteurs de
+throttle, et un repli sur LocMemCache les diviserait par le nombre de workers
+Gunicorn sans que rien ne le signale. Le démarrage échoue plutôt que de
+dégrader en silence.
 
 **Branches** (identiques dans les trois dépôts) : `main` est la ligne de
 développement à jour ; `release/mvp-v1` est l'**unique** ligne de release, sur
@@ -354,6 +366,33 @@ switch, petit choix exclusif → segmented, liste → select, plage → slider.
   `core/tests/test_multi_appartenance.py` et se valide **par mutation** : rendre
   la résolution globale doit rendre le test rouge (protocole et tableau des
   quatre mutations de référence dans `chm-backend/README.md`).
+
+### Sécurité — trois acquis à ne pas défaire
+
+Livrés avant la mise en production (lots 1 à 3), chacun validé par mutation.
+Les défaire ne casserait aucun test évident, d'où ce rappel.
+
+1. **Cloisonnement INTRA-tenant** (pas seulement cross-tenant). Trois niveaux de
+   sérialisation de la fiche membre — annuaire / personnel / staff. `notes` et
+   les métadonnées de suppression ne sortent QUE du niveau staff. Aucun ViewSet
+   métier ne doit se contenter de `IsAuthenticated` : `EstMembreDuTenant` au
+   minimum. La garde `core/tests/test_garde_permissions.py` le vérifie et
+   embarque ses propres mutations.
+2. **Plafonds d'authentification sur les ÉCHECS seulement**, et le plafond par
+   identifiant est évalué **après** la vérification du mot de passe — sinon
+   n'importe qui verrouille le compte d'un tiers. `DJANGO_NUM_PROXIES` doit être
+   la valeur EXACTE de la topologie : trop haut les plafonds sont contournables,
+   trop bas tous les clients partagent un compteur.
+3. **Médias privés** derrière `/api/core/medias/<type>/<id>/`, qui vérifie le
+   tenant **sur l'objet** puis délègue à Nginx via `X-Accel-Redirect`. Il n'y a
+   plus de `location /media/` publique et il ne doit pas y en avoir. Un nouveau
+   type de fichier se déclare dans `core/medias.py::REGISTRE`, nulle part
+   ailleurs. Côté front, une image protégée s'affiche via
+   `MediaProtegeDirective` — un `<img src>` n'envoie jamais le Bearer.
+
+`make smoke-medias` est le seul contrôle qui prouve le maillon Nginx : les
+tests Django prouvent que Django ÉMET l'en-tête, jamais que Nginx sert le
+fichier.
 
 ## Pour aller plus loin
 
