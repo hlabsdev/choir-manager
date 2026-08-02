@@ -1,0 +1,21 @@
+# Override de production VPS. Toujours l'utiliser avec compose.yaml :
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d
+
+services:
+  frontend:
+    # Supprime réellement la publication héritée de compose.yaml. Le seul
+    # point d'entrée public est mrs-gateway.
+    ports: !reset []
+    networks:
+      - chm
+      - mrs-gateway
+    volumes:
+      - /srv/chm/media:/usr/share/nginx/media:ro
+
+  backend:
+    volumes:
+      - /srv/chm/media:/app/media
+
+networks:
+  mrs-gateway:
+    external: true

@@ -185,7 +185,7 @@ services:
     healthcheck:
       # urllib plutôt que curl : l'image est volontairement minimale.
       test: ["CMD", "python", "-c",
-             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/core/health/', timeout=5).status==200 else 1)"]
+             "import os,urllib.request,sys; host=os.environ['DJANGO_ALLOWED_HOSTS'].split(',')[0]; proto='https' if os.environ.get('DJANGO_SECURE_SSL_REDIRECT','').lower() in ('true','1','yes','on') else 'http'; r=urllib.request.Request('http://127.0.0.1:8000/api/core/health/',headers={'Host':host,'X-Forwarded-Proto':proto}); sys.exit(0 if urllib.request.urlopen(r,timeout=5).status==200 else 1)"]
       interval: 15s
       timeout: 10s
       retries: 5

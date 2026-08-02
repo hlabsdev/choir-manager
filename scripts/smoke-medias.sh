@@ -55,7 +55,7 @@ if cree:
 if not Membre.objects.filter(user=user, chorale=chorale).exists():
     adherer(user, chorale)
 
-Partition.objects.filter(titre='Smoke').delete()
+Partition.objects.filter(chorale=chorale, titre='Smoke').delete()
 chant, _ = Chant.objects.get_or_create(chorale=chorale, titre='Smoke', defaults={'style':'autre'})
 p = Partition.objects.create(
     chorale=chorale, chant=chant, titre='Smoke',
