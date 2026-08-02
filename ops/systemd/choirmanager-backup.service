@@ -1,0 +1,11 @@
+[Unit]
+Description=Sauvegarde chiffrée ChoirManager vers Google Drive
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/root/choir-manager/ops/backup/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

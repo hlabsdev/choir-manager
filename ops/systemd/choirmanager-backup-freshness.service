@@ -1,0 +1,7 @@
+[Unit]
+Description=Contrôle de fraîcheur de la sauvegarde ChoirManager
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/root/choir-manager/ops/backup/check-freshness.sh
