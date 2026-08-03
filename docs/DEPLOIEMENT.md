@@ -409,16 +409,107 @@ make down               # arrêt SANS perte de données
 > `make nettoyage-jetable` l'expose derrière une confirmation explicite et ne
 > doit servir que sur un environnement jetable.
 
-### Mise à jour applicative
+### Mise à jour applicative — par TAG, jamais par branche
 
 ```bash
-git pull --ff-only
-git submodule update --init --recursive
-make build
-make migrate            # service one-shot, avant de redémarrer l'API
-make up
-make ps
+make prod-deploie TAG=v1.2.0-rc.4
 ```
+
+**`TAG` est obligatoire et sans défaut.** Un déploiement doit désigner un état
+figé et nommé : une branche bouge sous les pieds, `main` au moment du `pull`
+n'est pas forcément ce qu'on croyait déployer, et sans repère exact le retour
+arrière n'a pas de cible. La cible refuse de démarrer sans lui.
+
+Elle enchaîne, en échouant bruyamment à chaque étape :
+
+| # | Étape | Pourquoi |
+| --- | --- | --- |
+| 1 | `git fetch --tags` + le tag existe ? | échouer ici ne coûte rien |
+| 2 | contrôle du **sens** de l'évolution | refuse un tag dont les pointeurs de sous-module RECULENT (voir plus bas) |
+| 3 | **sauvegarde base + médias** | après les validations, mais AVANT toute mutation : un déploiement qui casse doit avoir un retour arrière |
+| 4 | `git checkout --detach <TAG>` | jamais une branche |
+| 5 | `git submodule update --init --recursive` | **l'étape qu'un `git pull` seul oublie** : le pointeur serait à jour, la pile démarrerait sur l'ancien code des sous-modules |
+| 6 | `build` | |
+| 7 | `migrate` (service one-shot) puis redémarrage backend + frontend | la base n'est pas touchée par le redémarrage |
+| 8 | `check --deploy` | la cible **échoue** si ce n'est pas vert |
+
+L'étape 5 mérite qu'on s'y arrête : c'est le mode de défaillance le plus
+silencieux de ce dépôt. Un superprojet à jour dont les sous-modules sont restés
+en arrière démarre parfaitement, sert l'ancien code, et rien ne le signale.
+
+#### L'étape 2, et pourquoi elle existe
+
+Le 2 août 2026, un commit a fait reculer les deux pointeurs de sous-module vers
+l'état d'avant les lots de sécurité. Il n'a jamais été déployé, mais rien ne
+l'en aurait empêché. Le hook `verif-sous-modules` ne l'attrape pas : il vérifie
+que le pointeur correspond au HEAD du sous-module, jamais le SENS de
+l'évolution.
+
+La cible refuse donc un tag qui recule, et dit quoi faire :
+
+```
+    ⚠ chm-backend RECULE : 628282a → f2d422a
+ERREUR — ce tag ferait RECULER au moins un sous-module.
+  Si c'est voulu     : make prod-deploie TAG=... FORCE=1
+  Pour revenir       : make prod-retour-arriere TAG=...
+```
+
+Surchargeable et non bloquant par principe : un retour arrière recule
+volontairement, et c'est légitime.
+
+#### Ce que `check --deploy` tolère, et pourquoi une seule entrée
+
+`security.W008` (`SECURE_SSL_REDIRECT=False`) est attendu **en permanence** : le
+TLS est terminé par `mrs-gateway`, Django n'est jamais exposé directement, et le
+passer à `True` provoquerait une boucle de redirection. Un `--fail-level
+WARNING` nu échouerait donc à chaque déploiement — et on prendrait l'habitude de
+l'ignorer, ce qui vaut moins qu'aucun contrôle.
+
+Tout le reste fait échouer, **y compris `W012`/`W016`** que
+`DJANGO_COOKIE_SECURE=True` doit solder en production.
+
+La cible exige en plus que le rapport ait réellement été produit. Sans cette
+sentinelle, une commande qui échoue avant d'atteindre Django (pile arrêtée,
+variable manquante) renvoie un message sans code `(security.Wxxx)` — donc
+« aucun code inattendu », donc la cible passe, et le déploiement est validé sans
+qu'aucun contrôle n'ait tourné. Défaut constaté en testant la cible.
+
+### Retour arrière
+
+Symétrique du déploiement, `TAG` également obligatoire :
+
+```bash
+make prod-retour-arriere TAG=v1.2.0-rc.3
+```
+
+Elle refait checkout + `submodule update` + build + redémarrage, **sans jouer de
+migration**, puis les mêmes contrôles.
+
+⚠️ **Revenir au code ne défait pas une migration déjà jouée.** Les migrations
+Django ne sont pas systématiquement réversibles. Si le déploiement fautif en a
+joué une, le retour arrière du code ne suffit pas : il faut restaurer la
+sauvegarde prise à son étape 3.
+
+```bash
+make prod-restauration DUMP=backups/pre-<tag>-<horodatage>.dump
+make prod-up
+```
+
+Le chemin de la dernière sauvegarde de pré-déploiement est conservé dans
+`.dernier-pre-deploiement`, et rappelé en fin de `prod-retour-arriere`.
+
+**Séquence complète d'un retour arrière après migration :**
+
+```bash
+make prod-retour-arriere TAG=<tag précédent>      # code + sous-modules
+cat .dernier-pre-deploiement                      # retrouver la sauvegarde
+make prod-restauration DUMP=<ce chemin>.dump      # schéma + données
+make prod-up && make prod-smoke                   # redémarrer et contrôler
+```
+
+Les médias sont dans l'archive `<même préfixe>-media.tgz` ; les restaurer se
+fait à la main dans `/srv/chm/media`, la suppression d'un fichier étant rare et
+rarement souhaitable à annuler en bloc.
 
 ## 6. Tests
 
@@ -481,22 +572,27 @@ Noter le temps réel de restauration : il conditionne l'objectif de reprise.
 
 ## 8. Rollback
 
-1. arrêter la pile : `make down` ;
-2. remettre le superprojet et ses sous-modules sur le tag précédent :
+La procédure vit au §5, avec le déploiement dont elle est le symétrique :
+[« Retour arrière »](#retour-arrière). En résumé :
 
-   ```bash
-   git checkout v1.0.0-mvp.1
-   git submodule update --init --recursive
-   ```
+```bash
+make prod-retour-arriere TAG=<tag précédent>
+```
 
-3. reconstruire : `make build` ;
-4. restaurer la sauvegarde **contemporaine de ce tag** — une sauvegarde plus
-   récente peut contenir un schéma que les migrations de l'ancienne version ne
-   savent pas lire ;
-5. redémarrer : `make up`.
+Deux points qui ne s'improvisent pas au moment où l'on en a besoin :
 
-Les migrations Django ne sont pas systématiquement réversibles : un rollback de
-schéma passe par la restauration d'une sauvegarde, pas par `migrate <version>`.
+- **le code revient, le schéma non.** Les migrations Django ne sont pas
+  systématiquement réversibles : un rollback de schéma passe par la
+  restauration d'une sauvegarde, jamais par `migrate <version>` ;
+- **la sauvegarde à restaurer est celle prise au moment du déploiement fautif**,
+  pas la plus récente : une sauvegarde postérieure contient déjà le schéma que
+  l'ancienne version ne sait pas lire. C'est exactement ce que produit l'étape 3
+  de `prod-deploie`, dont le chemin est conservé dans
+  `.dernier-pre-deploiement`.
+
+Sur le poste de développement, où il n'y a ni tag ni cibles `prod-*`, le
+manuel reste : `git checkout <tag> && git submodule update --init --recursive`,
+puis `make build && make up`.
 
 ## 9. Avant une préproduction
 

@@ -19,7 +19,9 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
         superuser provision seed purge-tokens \
         test test-backend test-frontend collect front-build \
         sauvegarde restauration audit-image nettoyage-jetable \
-        prod-deploie prod-up prod-down prod-build prod-migrate prod-logs prod-ps \
+        prod-deploie prod-sauvegarde-pre-deploiement _prod-verifie-progression \
+        _prod-check-deploy prod-retour-arriere prod-restauration \
+        prod-up prod-down prod-build prod-migrate prod-logs prod-ps \
         prod-shell prod-smoke prod-sauvegarde prod-verif-sauvegarde prod-restauration-test
 
 # ---------------------------------------------------------------------------
@@ -191,20 +193,180 @@ smoke-medias: ## Vérifie les médias privés À TRAVERS NGINX (pile démarrée 
 # du frontend en clair et remonte les volumes locaux à la place de
 # /srv/chm/media. Le préfixe `prod-` est là pour rendre la confusion difficile.
 
-prod-deploie: ## PROD — déploiement complet : récupère, construit, migre, redémarre
-	@echo "▸ Récupération (superprojet + sous-modules)"
-	git pull --ff-only
-	git submodule update --init --recursive
-	@echo "▸ Construction des images"
-	$(COMPOSE_PROD) build
-	@echo "▸ Migrations (service one-shot)"
-	$(COMPOSE_PROD) run --rm migrate
-	@echo "▸ Redémarrage"
-	$(COMPOSE_PROD) up -d
-	@echo "▸ État"
-	@$(COMPOSE_PROD) ps
-	@echo
-	@echo "Déploiement terminé. Contrôle conseillé : make prod-smoke"
+prod-deploie: ## PROD — déploie un TAG — make prod-deploie TAG=v1.2.0-rc.4
+	@# TAG est OBLIGATOIRE, sans défaut. Un déploiement doit désigner un état
+	@# figé et nommé : une branche bouge sous les pieds, et `main` au moment du
+	@# `pull` n'est pas forcément ce qu'on croyait déployer. Sans repère exact,
+	@# le retour arrière n'a pas de cible.
+	@test -n "$(TAG)" || { \
+	  echo "ERREUR — TAG est obligatoire."; \
+	  echo "  make prod-deploie TAG=v1.2.0-rc.4"; \
+	  echo "  Tags disponibles :"; \
+	  git tag --sort=-v:refname | head -5 | sed 's/^/    /'; \
+	  false; }
+	@set -Eeuo pipefail; \
+	echo "▸ 1/8 — Récupération des tags et validation"; \
+	git fetch --tags --prune origin; \
+	git rev-parse -q --verify "refs/tags/$(TAG)^{commit}" >/dev/null \
+	  || { echo "ERREUR — le tag $(TAG) n'existe pas."; false; }; \
+	echo "▸ 2/8 — Contrôle du sens de l'évolution"; \
+	$(MAKE) --no-print-directory _prod-verifie-progression TAG="$(TAG)"; \
+	echo "▸ 3/8 — Sauvegarde AVANT toute mutation"; \
+	$(MAKE) --no-print-directory prod-sauvegarde-pre-deploiement TAG="$(TAG)"; \
+	echo "▸ 4/8 — Checkout du tag $(TAG)"; \
+	git checkout --detach "$(TAG)"; \
+	echo "▸ 5/8 — Synchronisation des sous-modules"; \
+	git submodule update --init --recursive; \
+	git submodule status --recursive | sed 's/^/    /'; \
+	echo "▸ 6/8 — Construction des images"; \
+	$(COMPOSE_PROD) build; \
+	echo "▸ 7/8 — Migrations puis redémarrage"; \
+	$(COMPOSE_PROD) run --rm migrate; \
+	$(COMPOSE_PROD) up -d --no-deps backend frontend; \
+	$(COMPOSE_PROD) ps; \
+	echo "▸ 8/8 — Contrôles de déploiement"; \
+	$(MAKE) --no-print-directory _prod-check-deploy; \
+	echo; \
+	echo "✓ $(TAG) déployé. Repli : $$(cat .dernier-pre-deploiement 2>/dev/null)"; \
+	echo "  Contrôle conseillé : make prod-smoke"; \
+	echo "  Retour arrière     : make prod-retour-arriere TAG=<tag précédent>"
+
+# La sauvegarde vient APRÈS les validations mais AVANT toute mutation : rien n'a
+# encore bougé à ce stade, et on ne paie pas une sauvegarde pour un déploiement
+# voué à échouer sur un tag inexistant.
+#
+# Distincte de `prod-sauvegarde` (périodique, chiffrée, hors site) : celle-ci
+# reste sur l'hôte, immédiatement lisible, sans dépendre du stockage distant ni
+# de rclone au moment précis où l'on en a besoin.
+#
+# POSTGRES_* est résolu DANS le conteneur (`sh -c` en quotes simples) et non sur
+# l'hôte : Make ne lit pas `.env`, donc l'hôte n'a aucune raison d'avoir ces
+# variables. Compose, lui, les injecte. `set -u` a révélé cette dépendance.
+prod-sauvegarde-pre-deploiement:
+	@set -Eeuo pipefail; \
+	mkdir -p backups; \
+	base="backups/pre-$(TAG)-$(HORODATAGE)"; \
+	$(COMPOSE_PROD) exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > "$$base.dump"; \
+	$(COMPOSE_PROD) exec -T backend tar czf - -C /app/media . > "$$base-media.tgz"; \
+	printf '%s\n' "$$base" > .dernier-pre-deploiement; \
+	echo "    base   : $$base.dump ($$(du -h "$$base.dump" | cut -f1))"; \
+	echo "    médias : $$base-media.tgz ($$(du -h "$$base-media.tgz" | cut -f1))"
+
+# Refuse un tag dont les pointeurs de sous-module RECULENT — sauf FORCE=1.
+#
+# Vient d'un incident réel : un commit du 2 août faisait reculer les deux
+# pointeurs vers l'état d'avant les lots de sécurité. Il n'a jamais été déployé,
+# mais rien ne l'en aurait empêché. Le hook `verif-sous-modules` ne l'attrape
+# pas : il vérifie que le pointeur correspond au HEAD du sous-module, jamais le
+# SENS de l'évolution.
+#
+# Surchargeable, et non bloquant par principe : `prod-retour-arriere` recule
+# volontairement, et c'est légitime.
+_prod-verifie-progression:
+	@set -Eeuo pipefail; \
+	recul=0; \
+	for sm in chm-backend chm-frontend; do \
+	  actuel=$$(git rev-parse "HEAD:$$sm" 2>/dev/null || echo ""); \
+	  vise=$$(git rev-parse "$(TAG)^{commit}:$$sm" 2>/dev/null || echo ""); \
+	  if [ -z "$$actuel" ] || [ -z "$$vise" ]; then continue; fi; \
+	  if [ "$$actuel" != "$$vise" ] && git -C "$$sm" merge-base --is-ancestor "$$vise" "$$actuel" 2>/dev/null; then \
+	    echo "    ⚠ $$sm RECULE : $${actuel:0:7} → $${vise:0:7}"; \
+	    recul=1; \
+	  else \
+	    echo "    $$sm : $${actuel:0:7} → $${vise:0:7}"; \
+	  fi; \
+	done; \
+	if [ "$$recul" = "1" ] && [ "$(FORCE)" != "1" ]; then \
+	  echo; \
+	  echo "ERREUR — ce tag ferait RECULER au moins un sous-module."; \
+	  echo "  Légitime pour un retour arrière, suspect pour un déploiement."; \
+	  echo "  Si c'est voulu     : make prod-deploie TAG=$(TAG) FORCE=1"; \
+	  echo "  Pour revenir       : make prod-retour-arriere TAG=$(TAG)"; \
+	  false; \
+	fi
+
+# `check --deploy` avec une allowlist d'UNE entrée.
+#
+# `security.W008` (SECURE_SSL_REDIRECT=False) est attendu en PERMANENCE : le TLS
+# est terminé par mrs-gateway, Django n'est jamais exposé directement, et le
+# passer à True provoquerait une boucle de redirection. Un `--fail-level
+# WARNING` nu échouerait donc à CHAQUE déploiement — et on prendrait l'habitude
+# de l'ignorer, ce qui vaut moins qu'aucun contrôle.
+#
+# Tout le reste fait échouer, y compris W012/W016 que DJANGO_COOKIE_SECURE=True
+# doit solder en production.
+#
+# ⚠️ La sentinelle `System check identified` n'est pas décorative : sans elle,
+# une commande qui échoue AVANT d'atteindre Django (pile arrêtée, variable
+# d'environnement manquante) produit un message d'erreur qui ne contient aucun
+# code `(security.Wxxx)` — donc « aucun code inattendu », donc la cible passe.
+# Un déploiement serait alors validé sans qu'aucun contrôle n'ait tourné.
+# Constaté en testant cette cible, pas imaginé.
+_prod-check-deploy:
+	@set -Eeuo pipefail; \
+	sortie=$$($(COMPOSE_PROD) exec -T backend python manage.py check --deploy 2>&1 || true); \
+	printf '%s' "$$sortie" | grep -q 'System check identified' || { \
+	  printf '%s\n' "$$sortie"; \
+	  echo; \
+	  echo "ERREUR — check --deploy n'a pas produit de rapport."; \
+	  echo "  La commande n'a pas tourné (pile arrêtée, variable manquante...)."; \
+	  echo "  Sans ce contrôle, un déploiement passerait SANS vérification."; \
+	  false; }; \
+	inattendus=$$(printf '%s' "$$sortie" | grep -oE '\([a-z_]+\.[EWC][0-9]+\)' | tr -d '()' | grep -vx 'security.W008' | sort -u || true); \
+	if [ -n "$$inattendus" ]; then \
+	  printf '%s\n' "$$sortie"; \
+	  echo; \
+	  echo "ERREUR — contrôles de déploiement non verts. Codes inattendus :"; \
+	  printf '  %s\n' $$inattendus; \
+	  false; \
+	fi; \
+	echo "    check --deploy : vert (security.W008 attendu, TLS en amont)"
+
+prod-retour-arriere: ## PROD — revient à un TAG antérieur — make prod-retour-arriere TAG=v1.2.0-rc.3
+	@test -n "$(TAG)" || { \
+	  echo "ERREUR — TAG est obligatoire (le tag vers lequel revenir)."; \
+	  echo "  make prod-retour-arriere TAG=v1.2.0-rc.3"; \
+	  echo "  Tags disponibles :"; \
+	  git tag --sort=-v:refname | head -5 | sed 's/^/    /'; \
+	  false; }
+	@set -Eeuo pipefail; \
+	echo "▸ 1/5 — Récupération des tags et validation"; \
+	git fetch --tags --prune origin; \
+	git rev-parse -q --verify "refs/tags/$(TAG)^{commit}" >/dev/null \
+	  || { echo "ERREUR — le tag $(TAG) n'existe pas."; false; }; \
+	echo "▸ 2/5 — Checkout de $(TAG) et synchronisation des sous-modules"; \
+	git checkout --detach "$(TAG)"; \
+	git submodule update --init --recursive; \
+	git submodule status --recursive | sed 's/^/    /'; \
+	echo "▸ 3/5 — Reconstruction"; \
+	$(COMPOSE_PROD) build; \
+	echo "▸ 4/5 — Redémarrage SANS migrate"; \
+	$(COMPOSE_PROD) up -d --no-deps backend frontend; \
+	$(COMPOSE_PROD) ps; \
+	echo "▸ 5/5 — Contrôles"; \
+	$(MAKE) --no-print-directory _prod-check-deploy; \
+	echo; \
+	echo "✓ Revenu à $(TAG)."; \
+	echo; \
+	echo "⚠ LE SCHÉMA N'A PAS ÉTÉ TOUCHÉ. Les migrations Django ne sont pas"; \
+	echo "  systématiquement réversibles : revenir au code ne défait pas une"; \
+	echo "  migration déjà jouée. Si le déploiement fautif en a joué une, il"; \
+	echo "  FAUT restaurer la sauvegarde prise juste avant lui :"; \
+	echo "      make prod-restauration DUMP=<sauvegarde>.dump"; \
+	echo "  Dernière sauvegarde de pré-déploiement :"; \
+	echo "      $$(cat .dernier-pre-deploiement 2>/dev/null || echo '(aucune)')"
+
+prod-restauration: ## PROD — restaure une sauvegarde — make prod-restauration DUMP=backups/xxx.dump
+	@test -n "$(DUMP)" || { \
+	  echo "ERREUR — préciser DUMP=backups/....dump"; \
+	  ls -1t backups/*.dump 2>/dev/null | head -5 | sed 's/^/  /'; \
+	  false; }
+	@test -f "$(DUMP)" || { echo "ERREUR — fichier introuvable : $(DUMP)"; false; }
+	@echo "Restaure $(DUMP) dans la base de PRODUCTION. Le contenu actuel sera ÉCRASÉ."
+	@read -p "Taper 'restaurer' pour confirmer : " r; \
+	  test "$$r" = "restaurer" || (echo "Annulé." && false)
+	@$(COMPOSE_PROD) exec -T db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --clean --if-exists' < "$(DUMP)"
+	@echo "✓ Base restaurée. Redémarrer : make prod-up"
 
 prod-up: ## PROD — démarre (ou met à jour) la pile
 	$(COMPOSE_PROD) up -d

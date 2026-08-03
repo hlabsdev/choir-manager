@@ -18,6 +18,9 @@ docs/.rendered/
 # Sauvegardes et exports locaux (dumps PostgreSQL, archives de médias,
 # copies de db.sqlite3 réalisées avant migration).
 backups/
+# Témoin écrit par `make prod-deploie` : chemin de la sauvegarde de repli.
+# Local à l'hôte, jamais versionné — il ne veut rien dire ailleurs.
+.dernier-pre-deploiement
 *.dump
 *.sql.gz
 *.sqlite3.bak
