@@ -212,6 +212,49 @@ redémarrez, et **re-mesurez** avant d'ouvrir la pile au public.
 Contrôle final, depuis l'extérieur : deux machines d'IP publiques différentes
 doivent pouvoir échouer chacune leur connexion sans se bloquer mutuellement.
 
+### ⛔ ÉTAPE BLOQUANTE — mesurer `client_max_body_size` sur `mrs-gateway`
+
+**Ne comptez pas sur le plafond applicatif seul avant d'avoir mesuré celui du
+second saut.** Même angle mort que `DJANGO_NUM_PROXIES` ci-dessus : une limite
+non lisible depuis ce dépôt, qui doit être mesurée sur l'hôte réel avant le
+premier dépôt de fichier en production.
+
+Deux paliers connus, un troisième non mesurable d'ici :
+
+| Palier | Valeur | Source |
+| --- | --- | --- |
+| Django (`TAILLE_MAX_OCTETS`, `core/medias.py`) | 10 Mo (médias existants), 15 Mo (`MEDIA_CHANT`) | ce dépôt |
+| Nginx frontend (`client_max_body_size`, `chm-frontend/nginx.conf`) | 20 Mo | ce dépôt |
+| `mrs-gateway` (second saut, devant Nginx frontend) | **inconnu** | à mesurer sur l'hôte |
+
+Si `mrs-gateway` impose une limite sous 15 Mo, un dépôt `MediaChant`
+parfaitement légitime côté Django reçoit un **413 opaque au second saut, sans
+jamais atteindre l'application** — la même trappe que celle documentée dans
+`core/medias.py` pour `TAILLE_MAX_OCTETS`, un cran plus loin, invisible depuis
+les journaux Django puisque la requête ne les atteint pas.
+
+**Procédure**, depuis une machine EXTÉRIEURE au serveur :
+
+```bash
+# Fichier de test à la taille du plafond applicatif le plus élevé (15 Mo).
+dd if=/dev/urandom of=/tmp/test-15mo.bin bs=1M count=15
+
+# Requête directement contre le domaine public (donc via mrs-gateway) —
+# n'importe quel endpoint authentifié suffit à observer le code renvoyé.
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -X POST https://VOTRE-DOMAINE/api/musique/medias-chant/ \
+  -H "Authorization: Bearer VOTRE-TOKEN" \
+  -F "fichier=@/tmp/test-15mo.bin"
+```
+
+Un `413` à ce stade vient de `mrs-gateway` (Django ne l'émettrait qu'après
+avoir reçu le corps entier — un plafond applicatif dépassé produit un `400`
+avec le message de `valider_fichier`, pas un `413` nu). Si `mrs-gateway`
+coupe en dessous de 15 Mo, **abaisser `MEDIA_CHANT.taille_max`
+(`core/medias.py`) à la valeur mesurée**, jamais l'inverse — remonter
+`client_max_body_size` sur une passerelle mutualisée est hors de portée de ce
+dépôt.
+
 ### Cookies et pile locale en HTTP
 
 `DJANGO_COOKIE_SECURE` vaut `True` par défaut : les cookies de session et CSRF
