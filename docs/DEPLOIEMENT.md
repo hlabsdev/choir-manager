@@ -212,7 +212,28 @@ redémarrez, et **re-mesurez** avant d'ouvrir la pile au public.
 Contrôle final, depuis l'extérieur : deux machines d'IP publiques différentes
 doivent pouvoir échouer chacune leur connexion sans se bloquer mutuellement.
 
-### ⛔ ÉTAPE BLOQUANTE — mesurer `client_max_body_size` sur `mrs-gateway`
+### ⛔ ÉTAPES BLOQUANTES — module audio (MediaChant) : trois actions avant exploitation
+
+Le front MediaChant (lecture + dépôt, fiche chant) n'est exploitable en
+production qu'après CES TROIS ACTIONS, dans cet ordre :
+
+1. **Mesurer `client_max_body_size` sur `mrs-gateway`** — le plafond
+   applicatif (15 Mo) doit passer le second saut. Procédure ci-dessous.
+2. **Rejouer la réconciliation Partition → MediaChant** — `Partition` est
+   resté le seul chemin d'écriture vivant depuis le bloc modèle (issue #2
+   chm-backend) ; toute Partition déposée depuis n'a aucun miroir
+   `MediaChant` tant que cette étape n'a pas tourné une seconde fois.
+   Procédure ci-dessous.
+3. **Seulement alors**, le front peut être poussé : il lit/écrit
+   exclusivement `MediaChant`, donc toute Partition orpheline de l'étape 2
+   resterait invisible à l'écran une fois le front en place.
+
+**Ordre du cutover, non négociable (issue #2)** : réconciliation → bascule du
+front → retrait de `Partition`. Jamais l'inverse — basculer le front avant
+d'avoir rejoué la réconciliation laisserait derrière toute Partition déposée
+pendant la transition, silencieusement.
+
+#### 1. Mesurer `client_max_body_size` sur `mrs-gateway`
 
 **Ne comptez pas sur le plafond applicatif seul avant d'avoir mesuré celui du
 second saut.** Même angle mort que `DJANGO_NUM_PROXIES` ci-dessus : une limite
@@ -254,6 +275,35 @@ coupe en dessous de 15 Mo, **abaisser `MEDIA_CHANT.taille_max`
 (`core/medias.py`) à la valeur mesurée**, jamais l'inverse — remonter
 `client_max_body_size` sur une passerelle mutualisée est hors de portée de ce
 dépôt.
+
+#### 2. Rejouer la réconciliation Partition → MediaChant
+
+La migration `musique/migrations/0005_migrer_partitions_vers_media_chant.py`
+n'a tourné qu'une fois, au déploiement du bloc modèle — un instantané, pas une
+synchronisation continue. `Partition` est resté le seul chemin d'écriture
+vivant depuis (le front ne le propose plus depuis le bloc 3, mais son
+endpoint n'est pas retiré côté serveur), donc toute Partition déposée depuis
+cet instantané n'a AUCUN miroir `MediaChant` — invisible dès que le front
+bascule, silencieusement.
+
+`musique/services.py::synchroniser_medias_chant_depuis_partitions` est
+IDEMPOTENTE et rejouable (dédup par `fichier.name` — une Partition déjà
+couverte n'est jamais dupliquée), conçue précisément pour cette seconde
+exécution :
+
+```bash
+docker compose exec backend python manage.py shell -c "
+from django.apps import apps
+from musique.services import synchroniser_medias_chant_depuis_partitions
+n = synchroniser_medias_chant_depuis_partitions(apps)
+print(f'{n} MediaChant créés par la réconciliation.')
+"
+```
+
+Ne copie ni ne déplace aucun fichier (le miroir réutilise le `fichier.name`
+de la Partition d'origine) — sans risque pour le contenu déjà en place, à
+rejouer aussi souvent que nécessaire tant que `Partition` reste accessible en
+écriture quelque part (admin Django compris).
 
 ### Cookies et pile locale en HTTP
 
