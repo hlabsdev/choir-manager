@@ -8,17 +8,19 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.2.0-rc.3`, sur
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.3.0-rc.2`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à la première chorale réelle. Backend et frontend
-passent respectivement ~361 et ~113 tests.
+passent respectivement ~427 et ~135 tests.
 
 PostgreSQL 17 **et Redis** sous Docker Compose. Trois piles :
 `compose.yaml` (base, prod-like), `+ compose.dev.yaml` (itération),
 `+ compose.prod.yaml` (VPS). Sur le serveur, **toujours les cibles `make
 prod-*`** : les cibles de développement omettent `compose.prod.yaml`, ce qui
-republierait le port 8080 en clair. Voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md)
-et [docs/deploiement_pile_complete.md](docs/deploiement_pile_complete.md).
+republierait le port 8080 en clair. Voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md),
+qui porte aussi la checklist des actions bloquantes à faire sur l'hôte réel
+avant toute mise en exploitation sensible (mesures NUM_PROXIES/mrs-gateway,
+réconciliation MediaChant).
 
 ⚠️ `REDIS_URL` est **obligatoire** hors DEBUG : le cache porte les compteurs de
 throttle, et un repli sur LocMemCache les diviserait par le nombre de workers
@@ -394,6 +396,30 @@ Les défaire ne casserait aucun test évident, d'où ce rappel.
 tests Django prouvent que Django ÉMET l'en-tête, jamais que Nginx sert le
 fichier.
 
+### Module Médias du répertoire (MediaChant) — généralisation de Partition
+
+Demande du terrain (pilote) : réécouter les lignes de pupitre, le tutti, les
+accompagnements d'un chant — pas seulement lire une partition. `MediaChant`
+(`musique/models.py`) généralise `Partition` : `type_fichier`
+(partition/audio/vidéo — **vidéo déclarée, non implémentée**) × `portee`
+(pupitre/tutti/accompagnement). Écriture : maître de chœur (tout le tenant) ou
+chef de pupitre, restreint à SON pupitre via `Poste.pupitre_concerne` — pas le
+simple groupe `chef_pupitre`, qui dit QUE mais jamais DE QUEL pupitre.
+
+**`Partition` existe encore, volontairement.** `MediaChant` est additif, pas
+un remplacement : le front (`media-chant-*` components) lit/écrit
+exclusivement `MediaChant` depuis le bloc 3, mais `Partition` reste en base et
+son endpoint n'est pas retiré. `musique/services.py::synchroniser_medias_chant_depuis_partitions()`
+(exposée par `manage.py reconcilier_medias_chant`, idempotente, rejouable en
+autonome) recopie chaque `Partition` en miroir `MediaChant` sans jamais
+copier ni déplacer de fichier. Ordre de bascule non négociable (issue
+chm-backend#2) : **réconciliation → bascule du front → retrait de
+`Partition`** — jamais l'inverse, sous peine de Partition déposées
+silencieusement invisibles. Checklist des actions hôte dans
+`docs/DEPLOIEMENT.md`.
+
+Téléchargement (audio et partition) : cf. l'exception assumée ci-dessous.
+
 **Exception assumée — téléchargement MediaChant.** Le bouton de
 téléchargement (`media-chant-lecteur.component.ts`, module audio) fait
 sciemment sortir un fichier du contrôle d'accès de l'application : une fois
@@ -406,13 +432,60 @@ sur une partition sous droits, "télécharger" invite à la diffusion là où
 l'écoute/consultation en ligne seule ne le faisait pas. À réévaluer si la
 chorale ou un ayant droit le signale.
 
+### Écran de pointage — optimistic update
+
+`PresencesListComponent` (`chm-frontend/src/app/features/presences/`) :
+chaque tap persiste immédiatement (`patchEntry()` mute le signal `entries`
+AVANT l'appel HTTP), jamais de bouton « enregistrer » global. Échec réseau →
+`sync='error'` visible (carte rouge, « Réessayer »), jamais de rollback
+silencieux ; retaper une carte en erreur renvoie le MÊME statut sans cycler.
+Compteurs (présents/retards/absents/excusés/taux) : `computed()` sur
+`entries()`, réactifs à chaque tap sans rechargement.
+
+**Divergence connue avec le besoin d'origine** : l'écriture (`canPointer`) est
+réservée à `maitre_choeur`/`bureau` — **pas** `chef_pupitre`, alors que le
+besoin exprimé au lancement du module laissait la porte ouverte (« le cas
+échéant »). Constaté en testant l'écran (aucun bug, comportement stable), pas
+encore tranché comme un choix produit définitif — à trancher si le besoin se
+confirme, pas à « corriger » sans validation.
+
+## Chantiers connus, non bloquants
+
+Aucun n'empêche le pilote d'utiliser l'outil. Ordre de risque décroissant,
+pas de difficulté — hérité de l'ancien suivi de jalons (`fil-conducteur.md`,
+purgé une fois son contenu périmé absorbé ici) et tenu à jour ici désormais,
+pas ailleurs.
+
+| # | Chantier | Pourquoi |
+| --- | --- | --- |
+| 1 | **Test 401 intermittent** (`chm-backend#1`) | Investigué en profondeur (issue à jour) : la piste initiale (threads + `transaction=True`) est RÉFUTÉE. 41 exécutions complètes, une seule reproduction, cause non isolée. Classé « connu, non reproduit, sous surveillance » — revisiter si le symptôme réapparaît en usage réel, avant plusieurs chorales simultanées. |
+| 2 | **Identité / email vérifié** | Prérequis d'un reset self-service : email facultatif, non vérifié, unicité insensible à la casse absente. |
+| 3 | **Reset self-service** | `changer-mot-de-passe` exige l'ancien — ne sert pas à qui l'a perdu. Seul le Bureau dépanne aujourd'hui, et seulement mono-chorale. |
+| 4 | **`must_change_password`** | Un mot de passe temporaire du Bureau reste valable indéfiniment. |
+| 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
+| 6 | **`CHECK_REVOKE_TOKEN`** | Lierait la validité du JWT au hash du mot de passe, ramènerait la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
+| 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. |
+| 8 | **Journal d'audit** | Connexions échouées, resets, changements de rôle, opérations financières, accès opérateur. |
+| 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
+| 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Audit de vulnérabilités en CI à ajouter. |
+
+Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
+partitions hors ligne, calendrier externe, notifications push/SMS, module
+Activités/Planning, application native.
+
 ## Pour aller plus loin
 
 - [README.md](README.md) — vue d'ensemble complète, installation, matrice des rôles.
 - [RELEASE_NOTES.md](RELEASE_NOTES.md) — périmètre des jalons figés.
-- [.agents/workflows/fil-conducteur.md](.agents/workflows/fil-conducteur.md) —
-  état réel et feuille de route active.
+- [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) — procédures d'exploitation et
+  checklist des actions bloquantes sur l'hôte réel.
 - [.agents/rules/choir-manager-rules.md](.agents/rules/choir-manager-rules.md) —
   règles de design/UX du projet.
 - [chm-backend/README.md](chm-backend/README.md) /
   [chm-frontend/README.md](chm-frontend/README.md) — détails par sous-module.
+
+Ce fichier est désormais la SEULE feuille de route à jour — l'ancien
+`.agents/workflows/fil-conducteur.md` et les brouillons de planification
+initiale ont été purgés (git en garde l'historique) : ils divergeaient
+silencieusement de l'état réel, exactement le défaut que cette section
+« Chantiers connus » ferme.

@@ -7,15 +7,15 @@ les notifications et les rapports.
 
 Le produit associe une API Django REST à une interface Angular mobile-first :
 
-- `chm-backend/` : Django 5, Django REST Framework, JWT et SQLite au stade MVP ;
+- `chm-backend/` : Django 5, Django REST Framework, JWT, PostgreSQL 17 et Redis ;
 - `chm-frontend/` : Angular 21 standalone et zoneless, Signals, Tailwind CSS 4
   et Vitest.
 
-> **État réel au 26 juillet 2026 :** le périmètre fonctionnel du MVP est
-> implémenté, le multi-chorale l'est côté backend ET frontend, et les suites
-> passent — 276 tests backend et 87 tests frontend. Le projet reste un
-> environnement de développement : il n'est pas encore prêt pour héberger des
-> données réelles en production.
+> **En production depuis le 2 août 2026**, sur https://choirmanager.sankof.tech,
+> pilote ouvert à la première chorale réelle. Le multi-chorale est livré côté
+> backend et frontend, et les suites passent — ~427 tests backend et ~135
+> tests frontend. Chantiers connus, non bloquants pour le pilote : voir
+> [CLAUDE.md](CLAUDE.md).
 
 Le code, les noms de classes et les champs de base de données sont en anglais.
 Les textes d'interface, les logs et les commentaires métier sont volontairement
@@ -34,19 +34,19 @@ Git.
 | Frontend | `https://github.com/hlabsdev/chm-frontend.git` |
 | Ligne de développement | `main` (à jour) |
 | Ligne de release | `release/mvp-v1` — **unique**, les tags s'y incrémentent |
-| Dernier jalon | tag annoté `v1.1.0-rc.2` (multi-chorale frontend) |
-| Backend figé par le jalon | `a41ddb8` |
-| Frontend figé par le jalon | `07c9e94` |
+| Dernier jalon | tag annoté `v1.3.0-rc.2` (module Médias du répertoire) |
+
+Le commit backend/frontend exact figé par un tag se lit sur le pointeur de
+sous-module à ce tag (`git show <tag>:chm-backend`) — ne pas le dupliquer ici,
+il diverge à chaque nouveau tag.
 
 ## Site en ligne
 
 Une instance de démonstration est accessible à l'adresse : https://choirmanager.sankof.tech/
 
 Le périmètre du jalon est décrit dans [RELEASE_NOTES.md](RELEASE_NOTES.md). Le
-travail à venir et ses critères de sortie sont centralisés dans
-[.agents/workflows/fil-conducteur.md](.agents/workflows/fil-conducteur.md).
-Le plan technique détaillé de la prochaine étape est disponible dans
-[docs/PLAN_DEPLOIEMENT_DOCKER_POSTGRES_WSL.md](docs/PLAN_DEPLOIEMENT_DOCKER_POSTGRES_WSL.md).
+travail à venir et les chantiers connus sont centralisés dans
+[CLAUDE.md](CLAUDE.md) — seule feuille de route tenue à jour.
 
 ## Fonctionnalités disponibles
 
@@ -58,7 +58,7 @@ Le plan technique détaillé de la prochaine étape est disponible dans
 | Structure | Opérationnel | Pupitres, postes, mandats, groupes et organigramme |
 | Onboarding | Opérationnel | Demande de chorale modérée, provisionnement opérateur, invitation choriste |
 | Présences | Opérationnel | Répétitions, pointage mobile, permissions d'absence et validations |
-| Répertoire | Opérationnel | Chants, thèmes, partitions et suivi des chants travaillés |
+| Répertoire | Opérationnel | Chants, thèmes, médias (partitions, audio par pupitre/tutti/accompagnement) et suivi des chants travaillés |
 | Finances | Opérationnel | Journal de caisse, catégories, tarifs, campagnes, cotisations et paiements |
 | Communications | Opérationnel | Annonces et pièces jointes |
 | Notifications | Opérationnel | Notifications in-app, compteur de non-lues et emails ciblés best-effort |
@@ -66,8 +66,8 @@ Le plan technique détaillé de la prochaine étape est disponible dans
 | Dashboard | Opérationnel | Indicateurs et actions adaptés au rôle |
 
 « Opérationnel » signifie ici présent dans le backend et l'interface, avec les
-contrôles d'accès correspondants. Cela ne signifie pas encore « exploitable en
-production » : voir [Limites actuelles](#limites-actuelles).
+contrôles d'accès correspondants et exploité en production. Chantiers connus
+et non bloquants : voir [CLAUDE.md](CLAUDE.md).
 
 ## Profils et accès
 
@@ -195,13 +195,13 @@ choir-manager/
 ├── chm-backend/                 sous-module Django REST
 ├── chm-frontend/                sous-module Angular
 ├── docs/
+│   ├── DEPLOIEMENT.md            procédures d'exploitation, checklist hôte
 │   ├── Guide_utilisateur_ChoirManager.docx
 │   └── build_user_manual.mjs
 ├── .agents/
-│   ├── rules/                   conventions du projet
-│   └── workflows/
-│       └── fil-conducteur.md     état réel et feuille de route active
+│   └── rules/                   conventions du projet
 ├── README.md
+├── CLAUDE.md                    seule feuille de route tenue à jour
 ├── RELEASE_NOTES.md
 └── VERSION
 ```
@@ -235,10 +235,10 @@ conserver le clone dans le système de fichiers Linux, par exemple
 `/mnt/c/...` : les bind mounts y sont plus lents et certains événements de
 surveillance de fichiers Linux ne sont pas transmis correctement.
 
-Pour restaurer exactement le jalon MVP :
+Pour restaurer exactement un jalon figé (ex. le dernier, `v1.3.0-rc.2`) :
 
 ```bash
-git checkout v1.0.0-mvp.1
+git checkout v1.3.0-rc.2
 git submodule update --init --recursive
 ```
 
@@ -373,10 +373,10 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient 276 tests couvrant notamment l'authentification, l'isolation
+La suite contient ~427 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
-présences, la musique, les finances, les annonces, les notifications, les
-rapports et la suspension d'une chorale.
+présences, la musique (dont les médias du répertoire), les finances, les
+annonces, les notifications, les rapports et la suspension d'une chorale.
 
 Frontend :
 
@@ -386,19 +386,14 @@ npm test
 npm run build
 ```
 
-La suite actuelle contient 87 tests Vitest répartis dans 13 fichiers. Elle couvre
-les guards (dont le cloisonnement opérateur), le décodage du token, le chemin
-unique de bascule de chorale, le sélecteur de tenant, la coquille applicative, le
-dashboard, des utilitaires partagés et des composants clés de structure,
-d'annonces et de rapports.
+La suite actuelle contient ~135 tests Vitest. Elle couvre les guards (dont le
+cloisonnement opérateur), le décodage du token, le chemin unique de bascule de
+chorale, le sélecteur de tenant, la coquille applicative, le dashboard, l'écran
+de pointage (optimistic update, échec réseau, compteurs), les médias du
+répertoire et des composants clés de structure, d'annonces et de rapports.
 
 Les garanties multi-chorale se valident **par mutation**, pas par une suite verte
 — protocole et tableau des mutations dans `chm-frontend/README.md`.
-
-Dernière vérification documentaire, le 26 juillet 2026 :
-
-- backend : 276 tests réussis ;
-- frontend : 87 tests réussis.
 
 ## Travailler avec les sous-modules
 
@@ -417,52 +412,29 @@ Après un `git pull` du superprojet, synchroniser les composants avec :
 git submodule update --init --recursive
 ```
 
-## Limites actuelles
+## Chantiers connus
 
-Le MVP ne doit pas être déployé tel quel avec des données réelles :
+Aucun n'empêche le pilote d'utiliser l'outil. Liste tenue à jour dans
+[CLAUDE.md](CLAUDE.md#chantiers-connus-non-bloquants) — reset self-service,
+CSP stricte, MFA, journal d'audit, observabilité, entre autres.
 
-- SQLite est encore la base principale et `db.sqlite3` est suivi dans le dépôt
-  backend pour le jalon de démonstration ;
-- `DEBUG=True`, `ALLOWED_HOSTS=*`, CORS ouvert et une clé secrète de
-  développement sont les valeurs par défaut ;
-- les médias sont stockés localement dans `chm-backend/media/` ;
-- aucune configuration Docker, CI/CD, sauvegarde, supervision ou déploiement
-  reproductible n'est encore fournie dans le superprojet ;
-- l'URL API du frontend est encore construite pour un usage local en HTTP ;
-- la couverture frontend reste ciblée et il n'existe pas encore de suite E2E
-  complète par rôle ;
-- SMTP et les dépendances système de WeasyPrint doivent être configurés dans
-  l'environnement cible.
+Modèle de livraison : développement sur une branche de fonctionnalité, fusion
+dans `main` une fois validée, puis convergence de `release/mvp-v1` sur le
+même commit et pose d'un tag annoté. Les tags s'incrémentent sur cette unique
+ligne de release ; les précédents ne sont jamais modifiés.
 
-Le passage en préproduction, avec PostgreSQL, configuration sécurisée,
-stockage persistant, CI et recette E2E, constitue le prochain jalon. Son ordre
-d'exécution et ses critères d'acceptation sont définis dans le
-[fil conducteur actif](.agents/workflows/fil-conducteur.md).
+## Hors périmètre actuel
 
-La migration PostgreSQL et la préparation Docker sont **livrées** (jalon 1,
-`v1.0.0-mvp.2`), comme le cloisonnement opérateur/tenant (jalon 2) et le passage
-multi-chorale backend puis frontend (jalons 3 et 4, `v1.1.0-rc.2`).
-
-Le modèle de livraison reste le même : développement sur une branche de
-fonctionnalité, fusion dans `main` une fois validée, puis convergence de
-`release/mvp-v1` sur le même commit et pose d'un tag annoté. Les tags
-s'incrémentent sur cette unique ligne de release ; les précédents ne sont jamais
-modifiés.
-
-## Hors périmètre du MVP
-
-Les fonctionnalités suivantes sont volontairement différées jusqu'après un
-pilote utilisateur : enregistrements audio/vidéo, notifications push et SMS,
-calendrier externe, application native, fonctionnement PWA/offline avancé et
-module Activités/Planning complet.
+Vidéo (déclarée dans le modèle `MediaChant`, non implémentée), notifications
+push et SMS, calendrier externe, application native, fonctionnement
+PWA/offline avancé et module Activités/Planning complet.
 
 ## Documentation complémentaire
 
 - [Guide utilisateur Word](docs/Guide_utilisateur_ChoirManager.docx)
-- [Plan WSL, Docker et PostgreSQL](docs/PLAN_DEPLOIEMENT_DOCKER_POSTGRES_WSL.md)
+- [Procédures d'exploitation et checklist hôte](docs/DEPLOIEMENT.md)
 - [README backend](chm-backend/README.md)
 - [README frontend](chm-frontend/README.md)
 - [Notes de version](RELEASE_NOTES.md)
-- [Instructions Claude Code](CLAUDE.md)
-- [Instructions Codex](AGENTS.md)
+- [Instructions Claude Code (seule feuille de route tenue à jour)](CLAUDE.md)
 - [Règles spécifiques ChoirManager](.agents/rules/choir-manager-rules.md)
