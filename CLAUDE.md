@@ -394,6 +394,18 @@ Les défaire ne casserait aucun test évident, d'où ce rappel.
 tests Django prouvent que Django ÉMET l'en-tête, jamais que Nginx sert le
 fichier.
 
+**Exception assumée — téléchargement MediaChant.** Le bouton de
+téléchargement (`media-chant-lecteur.component.ts`, module audio) fait
+sciemment sortir un fichier du contrôle d'accès de l'application : une fois
+récupéré, ce n'est plus un `blob:` éphémère mais une copie locale hors de
+toute permission. Ce n'est pas une faille — un choriste autorisé à lire le
+fichier pouvait déjà le capturer (capture d'écran, enregistrement audio), le
+téléchargement ne lui donne rien de nouveau qu'il n'avait déjà — mais c'est un
+choix produit assumé, pas un relâchement de la garantie du lot médias privés :
+sur une partition sous droits, "télécharger" invite à la diffusion là où
+l'écoute/consultation en ligne seule ne le faisait pas. À réévaluer si la
+chorale ou un ayant droit le signale.
+
 ## Pour aller plus loin
 
 - [README.md](README.md) — vue d'ensemble complète, installation, matrice des rôles.
