@@ -128,8 +128,45 @@ modèle/ViewSet :
   `restore` sans ce filtre (sinon 404 systématique sur l'objet qu'on veut
   justement restaurer).
 
-Tout nouveau modèle scopé chorale doit hériter `SoftDeleteModel`, sauf raison
-précise de ne pas l'être.
+**Quels modèles sont en suppression logique, et pourquoi ceux-là.** Le critère
+n'est pas « c'est important » mais **ce qui part en CASCADE avec le DELETE** —
+recensé à l'ORM (`_meta.related_objects` + `on_delete`), pas au jugé :
+
+| Modèle | Ce qu'un DELETE emportait |
+| --- | --- |
+| `Membre` | présences, permissions, cotisations, notifications |
+| `Chant` | partitions, médias, séances |
+| `MediaChant`, `Mouvement`, `Annonce` | le fichier / la ligne comptable elle-même |
+| `Cotisation` | ses paiements |
+| **`Repetition`** | **tout le pointage d'une soirée + les séances** — le DELETE le plus destructeur de l'app |
+| **`CampagneCotisation`** | **toutes ses cotisations** (pourtant protégées) **et leurs paiements** |
+
+Les deux derniers ont été convertis après coup : `Repetition` parce qu'une
+ligne d'agenda anodine emportait une soirée entière de pointage,
+`CampagneCotisation` parce que la protection posée sur `Cotisation` était
+annulable d'un clic depuis le parent — donc inexistante.
+
+⚠️ **Contrepartie de la suppression logique d'un parent** : ses enfants ne sont
+PAS marqués (ce serait la cascade qu'on ferme). Chaque lecture doit donc les
+exclure — `PresenceViewSet`, `SeanceChantViewSet`, `CotisationViewSet`,
+`TarifCotisationViewSet`, `PaiementCotisationViewSet` et `rapports/services.py`
+filtrent sur `…__is_deleted=False`. Sans cela, une répétition « supprimée »
+continuerait d'alimenter les taux d'assiduité : silencieux, donc pire que la
+cascade.
+
+**`Mandat` est le contre-exemple à connaître** : son `DELETE` est **fermé**
+(405, `MethodNotAllowed`) plutôt que rendu logique. Deux raisons — le domaine a
+déjà le bon geste (`terminer()`, un mandat clos EST l'archive), et surtout
+`roles_dans()` résout les droits sur `is_active=True` : un mandat mis à la
+corbeille sans être clôturé continuerait d'accorder ses permissions. Mieux vaut
+ne pas ouvrir cette porte que devoir la refermer.
+
+Le reste demeure en suppression physique, délibérément : `Pupitre`, `Poste`,
+`Theme`, `CategorieMouvement` sont des vocabulaires de configuration recréables
+en quelques secondes, `SeanceChant`/`TarifCotisation` des lignes de liaison,
+`Partition` est en voie de retrait. Un nouveau modèle scopé chorale hérite de
+`SoftDeleteModel` dès qu'un DELETE lui ferait perdre un historique — sinon non,
+une corbeille encombrée de vocabulaire ne se lit plus.
 
 ### Un User, N chorales — les permissions vivent sur le tenant, pas sur le User
 
