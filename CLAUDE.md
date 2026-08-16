@@ -192,17 +192,55 @@ superuser passe tous les `has_perm()`) ; le JWT porte un claim `is_operateur`
 distinct de `is_superuser` (devenu ambigu — le front doit lire `is_operateur`).
 
 **L'accès admin dépend de `est_operateur`, jamais des groupes** (qui ne sont
-plus portés par le compte). `ChoraleScopedAdminMixin` scope **deux** surfaces,
-à garder synchronisées : `get_queryset()` pour les listes, ET
-`formfield_for_foreignkey()`/`formfield_for_manytomany()` pour les listes
-déroulantes des formulaires. Ces dernières ne filtrent rien par défaut : sans
-elles, le formulaire d'un Poste ou d'un Membre expose le nom de **toutes** les
-chorales de la plateforme, et les objets des autres tenants dans ses autres
-relations — une fuite invisible dans les listes. Un administrateur
-de tenant rattaché à UNE chorale est scopé ; rattaché à plusieurs, il ne voit rien —
-l'admin s'authentifie par session, sans claim de tenant, et y inventer un
-tenant de session ouvrirait une troisième source de vérité. L'admin est un
-outil d'exploitation opérateur, pas un second front métier.
+plus portés par le compte). `ChoraleScopedAdminMixin` scope **trois** surfaces,
+à garder synchronisées — aucune ne couvre les autres :
+
+1. `get_queryset()` → les listes (changelists) ;
+2. `formfield_for_foreignkey()`/`formfield_for_manytomany()` → les listes
+   déroulantes des formulaires. Elles ne filtrent rien par défaut : sans elles,
+   le formulaire d'un Poste ou d'un Membre expose le nom de **toutes** les
+   chorales de la plateforme, et les objets des autres tenants dans ses autres
+   relations ;
+3. `get_list_filter()` → les **choix de la barre latérale de filtres**.
+   `RelatedFieldListFilter` les construit avec `field.get_choices()`, sans
+   requête ni scope : un filtre « Pupitre » ou « Campagne » énumérait donc les
+   objets de tous les tenants. Le filtre `chorale` est retiré, et **tout filtre
+   de relation est promu automatiquement** vers
+   `core/admin_scoping.py::RelationScopeeListFilter`. Promotion mécanique, pas
+   déclarative : un filtre ajouté demain est couvert sans que personne y pense.
+
+Ces trois fuites sont invisibles dans une liste — la donnée n'apparaît que dans
+un widget. Chacune est verrouillée dans `core/tests/test_cloisonnement_operateur.py`,
+la dernière avec sa mutation de référence.
+
+Un administrateur de tenant rattaché à UNE chorale est scopé ; rattaché à
+plusieurs, il ne voit rien — l'admin s'authentifie par session, sans claim de
+tenant, et y inventer un tenant de session ouvrirait une troisième source de
+vérité. L'admin est un outil d'exploitation opérateur, pas un second front métier.
+
+**Habillage de l'admin.** `templates/admin/base_site.html` (marque, polices) +
+`core/static/chm_admin/chm-admin.css` (thème). Le CSS redéfinit le **jeu de
+variables** de l'admin Django — teintes, boutons, messages, filtres suivent
+sans qu'aucun sélecteur de mise en page soit réécrit ; les quelques règles
+structurelles ne couvrent que ce qu'aucune variable n'atteint. Deux points
+non évidents : la surcharge vit dans `TEMPLATES["DIRS"]` et non dans
+`core/templates/`, car `django.contrib.admin` précède `core` dans
+INSTALLED_APPS et le chargeur APP_DIRS le choisirait ; et le thème sombre de
+l'admin reste fonctionnel parce que le CSS reprend le triptyque de sélecteurs
+de Django (`html[data-theme="light"], :root` / `@media prefers-color-scheme` /
+`html[data-theme="dark"]`) — mettre une couleur en dur dans une règle
+structurelle le casserait sans que rien ne le signale. Les valeurs sont
+recopiées **à la main** du système de design du front : les deux fichiers ne
+partagent aucun build.
+
+Les étiquettes d'état et la corbeille en masse sont mutualisées dans
+`core/admin_display.py` (`badge`, `colonne_badge`, `colonne_booleen`,
+`SoftDeleteAdminMixin`). ⚠️ La suppression logique en masse **itère et appelle
+`soft_delete()`**, jamais `queryset.update(is_deleted=True)` :
+`Membre.soft_delete()` clôture les mandats actifs, un `update()` laisserait des
+rôles encore résolus par `roles_dans()`. `SoftDeleteAdminMixin` ajoute ses
+actions par `get_actions()` et non par l'attribut `actions`, qu'un ModelAdmin
+enfant écraserait silencieusement.
 
 **Côté front, la dette « god-mode » est soldée** (jalon 4) : `AuthService`
 n'expose plus du tout `isSuperuser` — supprimé, pas rebranché sur
