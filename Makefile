@@ -228,7 +228,7 @@ prod-deploie: ## PROD — déploie un TAG — make prod-deploie TAG=v1.2.0-rc.4
 	$(MAKE) --no-print-directory _prod-check-deploy; \
 	echo; \
 	echo "✓ $(TAG) déployé. Repli : $$(cat .dernier-pre-deploiement 2>/dev/null)"; \
-	echo "  Contrôle conseillé : make prod-smoke"; \
+	echo "  Contrôle conseillé : make prod-smoke SMOKE_BASE_URL=https://votre-domaine"; \
 	echo "  Retour arrière     : make prod-retour-arriere TAG=<tag précédent>"
 
 # La sauvegarde vient APRÈS les validations mais AVANT toute mutation : rien n'a
@@ -389,10 +389,28 @@ prod-ps: ## PROD — état des services
 prod-shell: ## PROD — shell Django
 	$(COMPOSE_PROD) exec backend python manage.py shell
 
-prod-smoke: ## PROD — vérifie les médias privés À TRAVERS Nginx
+prod-smoke: ## PROD — vérifie les médias privés À TRAVERS Nginx — make prod-smoke SMOKE_BASE_URL=https://votre-domaine
+	@# SMOKE_BASE_URL est OBLIGATOIRE ici, SANS le défaut sur 127.0.0.1:8080 du
+	@# `smoke-medias` de développement. En production, `compose.prod.yaml`
+	@# retire TOUJOURS la publication du port frontend (`ports: !reset []` —
+	@# le seul point d'entrée est `mrs-gateway`, TLS terminé là, jamais par
+	@# Django ni Nginx directement — cf. le commentaire de `_prod-check-deploy`
+	@# sur security.W008). `127.0.0.1:8080` sur l'hôte ne peut donc JAMAIS être
+	@# ce projet en production : soit rien n'y répond, soit — pire — un tout
+	@# autre service de l'hôte y répond par coïncidence de port, et le script
+	@# échoue sur un message qui n'a rien à voir avec ChoirManager (observé :
+	@# un 405 avec `server: uvicorn`, signature d'un service tiers). Un défaut
+	@# silencieux aurait fait relire ce commentaire à la prochaine régression ;
+	@# `test -n` fait échouer la cible tout de suite, avec la bonne piste.
+	@test -n "$(SMOKE_BASE_URL)" || { \
+	  echo "ERREUR — SMOKE_BASE_URL est obligatoire en production."; \
+	  echo "  Le port frontend n'est pas publié sur l'hôte (mrs-gateway est le"; \
+	  echo "  seul point d'entrée public, TLS compris) :"; \
+	  echo "    make prod-smoke SMOKE_BASE_URL=https://votre-domaine"; \
+	  false; }
 	@echo "Les tests Django ne passent pas par Nginx. Ce contrôle interroge la"
 	@echo "pile réelle : fichier servi, /media/ muet, refus sans session."
-	@SMOKE_BASE_URL=$${SMOKE_BASE_URL:-http://127.0.0.1:8080} bash scripts/smoke-medias.sh
+	@SMOKE_BASE_URL="$(SMOKE_BASE_URL)" bash scripts/smoke-medias.sh
 
 # --- Sauvegardes chiffrées (cf. ops/backup, unités systemd) -----------------
 # Ces scripts tournent en root sur l'hôte, pas dans un conteneur : ils pilotent

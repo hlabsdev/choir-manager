@@ -630,7 +630,8 @@ Le chemin de la dernière sauvegarde de pré-déploiement est conservé dans
 make prod-retour-arriere TAG=<tag précédent>      # code + sous-modules
 cat .dernier-pre-deploiement                      # retrouver la sauvegarde
 make prod-restauration DUMP=<ce chemin>.dump      # schéma + données
-make prod-up && make prod-smoke                   # redémarrer et contrôler
+make prod-up                                       # redémarrer
+make prod-smoke SMOKE_BASE_URL=https://votre-domaine  # contrôler (obligatoire — cf. Makefile)
 ```
 
 Les médias sont dans l'archive `<même préfixe>-media.tgz` ; les restaurer se
