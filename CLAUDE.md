@@ -11,7 +11,7 @@ rapports. API Django REST + frontend Angular 21.
 **État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.3.0-rc.2`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à la première chorale réelle. Backend et frontend
-passent respectivement ~427 et ~135 tests.
+passent respectivement ~451 et ~135 tests.
 
 PostgreSQL 17 **et Redis** sous Docker Compose. Trois piles :
 `compose.yaml` (base, prod-like), `+ compose.dev.yaml` (itération),
@@ -232,6 +232,84 @@ de Django (`html[data-theme="light"], :root` / `@media prefers-color-scheme` /
 structurelle le casserait sans que rien ne le signale. Les valeurs sont
 recopiées **à la main** du système de design du front : les deux fichiers ne
 partagent aucun build.
+
+### Journal d'audit (app `audit`) — chantier n°8, livré
+
+UNE table (`EvenementAudit`) pour tout : écritures métier, gestes d'admin,
+authentification, exports, événements déclarés par le front. Un journal par
+domaine se serait mieux rangé et se serait moins lu — la question posée à un
+audit est « que s'est-il passé sur ce tenant entre telle et telle date ? ».
+
+**Deux natures d'événements, à ne jamais confondre.** Le champ `source`
+sépare ce que le SERVEUR a constaté (`api`, `admin`, `commande` — faisant foi)
+de ce que le CLIENT a déclaré (`frontend`). Un événement `frontend` arrive par
+`POST /api/audit/evenements-client/` : un navigateur peut en forger, en
+omettre, en rejouer. Il vaut comme signal d'usage, **jamais** comme preuve ni
+comme fondement d'une décision de sécurité. `EvenementAudit.fait_foi` porte la
+distinction pour le code, l'étiquette « Déclaré (non probant) » pour l'œil.
+
+Cet endpoint existe pour ce que l'API ne voit pas : toute action qui MODIFIE
+quelque chose passe déjà par le serveur et y est tracée. Restent les gestes
+purement client — ouvrir un écran, **télécharger** un média déjà chargé (le
+`blob:` de `media-chant-lecteur`, exception assumée ci-dessus, dont rien ne
+gardait trace), déclencher un export rendu dans le navigateur. Vocabulaire
+fermé (`ACTIONS_CLIENT`), `source` forcée côté vue, acteur/chorale/IP pris du
+serveur, throttle `audit_client` dédié — sans quoi ce serait l'endroit le plus
+simple du produit pour saturer la base.
+
+**Ce qui remplit le journal, sans qu'aucune vue y pense :**
+- `audit/signaux.py` branche `post_save`/`post_delete` sur les modèles métier.
+  ⚠️ Trois limites : `queryset.update()` n'émet AUCUN signal (les actions
+  groupées d'admin sont donc tracées à part, en un événement de synthèse, par
+  `AuditAdminMixin.response_action`) ; rien n'est écrit hors contexte d'audit
+  (migrations, fixtures et tests ne polluent pas la table — une commande qui
+  mérite une trace ouvre `contexte_audit()`, cf. `provision_chorale`) ; la
+  suppression logique est un `save()`, reconnue explicitement, sinon toute mise
+  à la corbeille passerait pour une « Modification ».
+- `audit/contexte.py` porte le QUI dans une `ContextVar` (pas un thread-local :
+  sous ASGI, plusieurs requêtes partagent un thread et le journal attribuerait
+  l'action à quelqu'un d'autre). Il stocke la REQUÊTE, pas un utilisateur
+  résolu — même piège que les `SimpleLazyObject` de `core/middleware.py`.
+- `audit/authentification.py` regroupe ce qu'aucun modèle ne produit :
+  connexions, **échecs de connexion** avec l'identifiant tenté, déconnexions,
+  bascules de tenant, changements de mot de passe. ⚠️ Jamais de mot de passe ni
+  de jeton, même tronqué : un journal est plus lu et plus exporté que le reste.
+
+**Un journal ne se corrige pas.** Les trois `has_*_permission` de son admin
+sont fermées, y compris pour l'opérateur. La rétention passe par
+`manage.py purger_journal_audit --jours N --confirmer` (défaut non destructif).
+Export CSV (tableur) et JSONL (outil de logs) en flux, `donnees` restant
+structuré en JSONL. `journaliser()` est le seul point d'entrée et **ne lève
+jamais** — même arbitrage que les emails best-effort : une trace ratée est un
+incident d'exploitation, une action métier annulée faute de trace est un
+incident utilisateur. Contrepartie assumée : ce n'est pas un registre
+transactionnellement garanti.
+
+### Corbeille de plateforme — `/admin/corbeille/`
+
+Écran GLOBAL (pas un par entité) listant tout ce qui est supprimé
+logiquement, avec restauration et suppression définitive. Réservé à
+l'**opérateur**, même règle que `?include_deleted=true` : consulter la
+corbeille, c'est lire ce qu'une chorale a décidé de faire disparaître.
+
+Global plutôt que par entité parce qu'une corbeille est presque toujours vide
+(six écrans vides valent moins qu'un), que la question qu'on lui pose est
+temporelle et non typée, et que concentrer le seul geste irréversible de
+l'admin sur UNE page en fait un endroit qu'on connaît. Les modèles sont
+découverts par introspection de `SoftDeleteModel` — un modèle ajouté demain y
+apparaît sans que personne y pense. La purge exige la saisie du mot
+`SUPPRIMER` et est journalisée AVANT l'effacement (après, `str(objet)` ne dit
+plus rien).
+
+**Plus aucun bouton de suppression n'efface**, c'est ce qui donne son sens à
+la restauration : `SoftDeleteAdminMixin` surcharge `delete_model()` et
+`delete_queryset()` et retire `delete_selected` du menu ; côté API,
+`MediaChantViewSet` et `CotisationViewSet` ont reçu le `SoftDeleteMixin` qui
+leur manquait. Pour MediaChant, deux erreurs se compensaient exactement (le
+queryset ne filtrait pas `is_deleted` non plus), donc rien ne dépassait tant
+que la suppression logique n'était écrite nulle part. Une garde par
+introspection (`core/tests/test_corbeille.py`) refuse désormais tout ViewSet
+d'un `SoftDeleteModel` dépourvu du mixin.
 
 Les étiquettes d'état et la corbeille en masse sont mutualisées dans
 `core/admin_display.py` (`badge`, `colonne_badge`, `colonne_booleen`,
@@ -503,7 +581,7 @@ pas ailleurs.
 | 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
 | 6 | **`CHECK_REVOKE_TOKEN`** | Lierait la validité du JWT au hash du mot de passe, ramènerait la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
 | 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. |
-| 8 | **Journal d'audit** | Connexions échouées, resets, changements de rôle, opérations financières, accès opérateur. |
+| ~~8~~ | ~~**Journal d'audit**~~ | **Livré** — app `audit`, cf. section dédiée ci-dessus. |
 | 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
 | 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Audit de vulnérabilités en CI à ajouter. |
 

@@ -469,6 +469,39 @@ rejouable sans effet de bord.
 > accès : un token expiré est refusé sur sa date d'expiration, blacklisté ou
 > non.
 
+### Rétention du journal d'audit
+
+Même nature de problème que les refresh tokens, à un rythme différent : la
+table `audit_evenementaudit` reçoit une ligne par écriture métier, par geste
+d'admin et par événement d'authentification. Elle ne se vide pas toute seule.
+
+```bash
+docker compose exec backend python manage.py purger_journal_audit --jours 365
+# → compte seulement, n'efface rien
+docker compose exec backend python manage.py purger_journal_audit --jours 365 --confirmer
+```
+
+Le défaut est **non destructif** : sans `--confirmer`, la commande annonce ce
+qu'elle purgerait et s'arrête. C'est la seule valeur par défaut acceptable
+pour un outil qui efface un journal, sachant qu'il finira dans un cron copié
+d'un exemple.
+
+**Fréquence retenue : mensuelle**, avec une rétention de 12 mois. Le
+raisonnement diffère de celui des tokens : le journal n'a aucune contrainte de
+fraîcheur (rien ne dépend de sa taille pour fonctionner), et c'est justement
+sa PROFONDEUR qui fait sa valeur — un incident se découvre rarement le jour
+même. Purger trop court, c'est perdre la seule trace au moment où on la
+cherche. Douze mois couvrent un cycle complet de mandats.
+
+```cron
+23 4 1 * *  cd /chemin/vers/choir-manager && docker compose exec -T backend python manage.py purger_journal_audit --jours 365 --confirmer >> /var/log/chm-purge-audit.log 2>&1
+```
+
+⚠️ Avant de raccourcir cette rétention, exporter (CSV ou JSONL, depuis
+`/admin/audit/evenementaudit/`). La purge est un `DELETE` sec : rien n'est
+archivé ailleurs, et le journal d'audit est le seul endroit où figurent les
+échecs de connexion et les suppressions définitives.
+
 ### Atteindre le backend directement
 
 Dans la pile cible, le backend **ne publie aucun port** : il n'est joignable que
