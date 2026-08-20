@@ -437,8 +437,49 @@ choriste s'inscrit via `/rejoindre/:code`.
 `notifications/services.py` (`notifier`, `notifier_groupe`,
 `envoyer_email_externe`) est le SEUL point d'entrée pour créer une notification
 in-app ou envoyer un email — jamais `Notification.objects.create` directement
-dans une vue. Emails best-effort (`fail_silently=True`) : ne doivent jamais
-faire échouer l'action métier qui les déclenche.
+dans une vue. Emails best-effort : n'utilisent plus `fail_silently=True`
+(qui avalait les échecs sans trace) mais un `try/except` qui journalise —
+même promesse tenue autrement : ne jamais faire échouer l'action métier qui
+les déclenche.
+
+**HTML — en ALTERNATIVE au texte, jamais à sa place.** `titre_html`/
+`contenu_html`/`cta_label`/`cta_url` (optionnels, sur `notifier`/
+`envoyer_email_externe`) ajoutent une version HTML aux couleurs de la
+plateforme (`notifications/templates/notifications/email/_base.html`) via
+`EmailMultiAlternatives.attach_alternative` — un client qui ne rend pas le
+HTML reçoit le texte brut, inchangé. Le pied de page HTML (chorale, mention
+« sans réponse ») est composé par `_envoyer_email` lui-même, à partir des
+MÊMES `chorale`/`reply_to` que la version texte : jamais recalculé par
+l'appelant, qui ne fournit que son propre contenu — sinon les deux versions
+pourraient diverger. `contenu_html` est réputée sûre (`format_html`/`escape`
+côté appelant) : toute chaîne d'origine externe (nom de contact, message d'un
+formulaire public) DOIT y passer avant d'entrer dans le HTML, contrairement au
+texte brut où ce risque n'existe pas.
+
+`SITE_URL` (`chm_config/settings.py`, optionnelle) porte l'origine publique de
+la pile, pour construire les liens absolus d'un email (bouton de connexion,
+lien direct vers une fiche d'admin) — un email n'a pas de requête HTTP dont
+dériver l'hôte. Vide → l'email reste utile (texte toujours complet) mais sans
+bouton cliquable, jamais un lien cassé.
+
+**Surfaces publiques qui envoient déjà un email HTML avec CTA** :
+`DemandeChoraleAdmin.approuver_et_provisionner` (bouton « Se connecter » →
+`{SITE_URL}/auth/login`) et deux alertes opérateur qui n'existaient pas avant
+— `core/views.py::_alerter_operateur_nouvelle_demande` /
+`_alerter_operateur_nouvelle_suggestion`, envoyées à
+`EMAIL_REPLY_TO_PLATEFORME` avec un bouton direct vers la fiche à traiter.
+Sans elles, une `DemandeChorale` ou une `Suggestion` ne se découvrait qu'en
+visitant l'admin — invisible potentiellement plus d'un jour.
+
+### Boîte à suggestions
+
+`core.Suggestion` — même famille que `DemandeChorale` : modèle de plateforme
+(pas de `chorale`), formulaire public (`POST /api/core/suggestions/`, throttle
+`suggestion` à 5/h, honeypot `site_web`), lecture réservée à l'opérateur via
+l'admin (`PlateformeOnlyAdminMixin`). Volontairement PAS `SoftDeleteModel` :
+aucune donnée sensible ni historique métier à préserver. Page front
+`/suggestions`, publique, liée depuis le pied de page des trois pages
+publiques et depuis `/contact`.
 
 ### Frontend
 
@@ -448,8 +489,10 @@ Standalone components + Signals uniquement (pas de NgModules, pas de
   login/logout/`changerMotDePasse`, `roles`/`isOperateur`/`choraleActive`/
   `chorales`/`aUnTenant`), `auth.interceptor.ts` (bearer + refresh mutualisé sur
   401), `auth.guard.ts` (`authGuard`, `roleGuard([...])` → redirige vers
-  `/acces-reserve`, une page contextuelle plutôt qu'un refus brut, et
-  `operateurGuard` pour les routes de plateforme).
+  `/acces-reserve`, une page contextuelle plutôt qu'un refus brut,
+  `operateurGuard` pour les routes de plateforme, et `guestGuard` — symétrique
+  d'`authGuard` — pour la landing publique : laisse passer un visiteur
+  anonyme, renvoie qui est déjà connecté vers `/dashboard`).
 - `core/tenant/` — `TenantContextService` : **chemin unique** des changements de
   chorale (voir ci-dessous). Rien d'autre ne doit remplacer les tokens.
 - `features/<domaine>/` — un dossier par domaine (membres, musique, presences,
@@ -458,6 +501,14 @@ Standalone components + Signals uniquement (pas de NgModules, pas de
 - `features/auth/` — en plus du login : `demande-chorale/` et `rejoindre/`
   (routes publiques, hors guard) et `mes-invitations/` (authentifiée, ouverte
   **sans tenant actif** — c'est la seule issue d'une session sans chorale).
+- `features/public/` — pages publiques d'information : `landing/` (« / »,
+  seule route sous `guestGuard`), `a-propos/`, `contact/` (coordonnées
+  statiques, `environment.contactEmail` — DOIT correspondre à
+  `EMAIL_REPLY_TO_PLATEFORME` côté backend, deux artefacts de déploiement
+  distincts) et `suggestions/` (formulaire public, `core.Suggestion`).
+  `a-propos`/`contact`/`suggestions` n'ont AUCUN garde, contrairement à la
+  landing : rien ne justifie de les cacher à quelqu'un déjà connecté qui les
+  atteint depuis un pied de page.
 - `features/operateur/` — `gestion-chorales`, réservée à `operateurGuard`.
 - `layout/main-layout/` — coquille des routes authentifiées, sidebar réductible
   en rail d'icônes (auto sous 1280px, préférence mémorisée au-delà), badge de
