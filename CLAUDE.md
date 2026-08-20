@@ -613,7 +613,7 @@ pas ailleurs.
 | --- | --- | --- |
 | 1 | **Test 401 intermittent** (`chm-backend#1`) | Investigué en profondeur (issue à jour) : la piste initiale (threads + `transaction=True`) est RÉFUTÉE. 41 exécutions complètes, une seule reproduction, cause non isolée. Classé « connu, non reproduit, sous surveillance » — revisiter si le symptôme réapparaît en usage réel, avant plusieurs chorales simultanées. |
 | 2 | **Identité / email vérifié** | Prérequis d'un reset self-service : email facultatif, non vérifié, unicité insensible à la casse absente. |
-| 3 | **Reset self-service** | `changer-mot-de-passe` exige l'ancien — ne sert pas à qui l'a perdu. Seul le Bureau dépanne aujourd'hui, et seulement mono-chorale. |
+| 3 | **Reset self-service** | `changer-mot-de-passe` exige l'ancien — ne sert pas à qui l'a perdu. Seul le Bureau dépanne aujourd'hui, et seulement mono-chorale. ⚠️ En attendant : `DemandeChoraleAdmin.approuver_et_provisionner` (`core/admin.py`) envoie le mot de passe généré **en clair par email** au contact fondateur — seul canal existant pour un premier compte. Stopgap documenté, à retirer dès qu'un lien de première connexion à usage unique existe. |
 | 4 | **`must_change_password`** | Un mot de passe temporaire du Bureau reste valable indéfiniment. |
 | 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
 | 6 | **`CHECK_REVOKE_TOKEN`** | Lierait la validité du JWT au hash du mot de passe, ramènerait la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
