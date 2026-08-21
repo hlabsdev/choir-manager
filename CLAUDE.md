@@ -56,6 +56,8 @@ supprimée (cf. `fix/tests-throttle-et-refresh-401`) ; ⚠️ si un autre agent
 travaille dans le même arbre, ouvrir un `git worktree` plutôt qu'un
 `git checkout -b`, sinon le changement de branche s'impose aussi à lui.
 
+**Sessions parallèles : worktree séparé obligatoire ; jamais deux sessions dans le même répertoire.**
+
 `release/mvp-v1` a été **supprimée** : elle n'existait que dans le superprojet
 — alors que ce paragraphe affirmait « identiques dans les trois dépôts » —
 n'avait JAMAIS divergé de `main` (0 commit unique sur 20 tags d'historique),
