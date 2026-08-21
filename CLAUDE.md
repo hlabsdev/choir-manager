@@ -48,12 +48,21 @@ throttle, et un repli sur LocMemCache les diviserait par le nombre de workers
 Gunicorn sans que rien ne le signale. Le démarrage échoue plutôt que de
 dégrader en silence.
 
-**Branches** (identiques dans les trois dépôts) : `main` est la ligne de
-développement à jour ; `release/mvp-v1` est l'**unique** ligne de release, sur
-laquelle les tags s'incrémentent malgré son nom historique. À la clôture d'un
-jalon, les deux convergent sur le même commit et le tag annoté y est posé. Les
-tags ne vivent que sur le superprojet : ses pointeurs figent déjà les
-sous-modules.
+**Branches** : `main` est l'**unique** ligne, dans les trois dépôts. Les tags
+annotés se posent dessus, et ne vivent que sur le superprojet — ses pointeurs
+figent déjà les sous-modules. Un correctif ou un lot qui ne doit pas bloquer un
+autre chantier en cours part sur une branche courte, fusionnée par PR puis
+supprimée (cf. `fix/tests-throttle-et-refresh-401`) ; ⚠️ si un autre agent
+travaille dans le même arbre, ouvrir un `git worktree` plutôt qu'un
+`git checkout -b`, sinon le changement de branche s'impose aussi à lui.
+
+`release/mvp-v1` a été **supprimée** : elle n'existait que dans le superprojet
+— alors que ce paragraphe affirmait « identiques dans les trois dépôts » —
+n'avait JAMAIS divergé de `main` (0 commit unique sur 20 tags d'historique),
+et n'était référencée par aucun outillage. C'était un second nom pour le même
+commit, qu'il fallait penser à faire avancer et qui mentait déjà dans cette
+page. Restaurable si besoin : `git push origin
+27a3934fdc7f04c9c7d55d0b873fc6f76e6e5659:refs/heads/release/mvp-v1`.
 
 - **Code** (variables, classes, champs DB) : anglais.
 - **UI, logs, commentaires métier** : français — volontaire et cohérent dans

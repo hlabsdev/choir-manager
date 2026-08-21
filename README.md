@@ -32,9 +32,8 @@ Git.
 | Superprojet | `https://github.com/hlabsdev/choir-manager.git` |
 | Backend | `https://github.com/hlabsdev/chm-backend.git` |
 | Frontend | `https://github.com/hlabsdev/chm-frontend.git` |
-| Ligne de développement | `main` (à jour) |
-| Ligne de release | `release/mvp-v1` — **unique**, les tags s'y incrémentent |
-| Dernier jalon | tag annoté `v1.3.0-rc.2` (module Médias du répertoire) |
+| Ligne de développement | `main` — **unique**, dans les trois dépôts ; les tags s'y posent |
+| Dernier jalon | tag annoté `v1.7.0-rc.3` (autonomie du compte, emails de marque, tolérance d'horloge JWT) |
 
 Le commit backend/frontend exact figé par un tag se lit sur le pointeur de
 sous-module à ce tag (`git show <tag>:chm-backend`) — ne pas le dupliquer ici,
@@ -418,10 +417,11 @@ Aucun n'empêche le pilote d'utiliser l'outil. Liste tenue à jour dans
 [CLAUDE.md](CLAUDE.md#chantiers-connus-non-bloquants) — reset self-service,
 CSP stricte, MFA, journal d'audit, observabilité, entre autres.
 
-Modèle de livraison : développement sur une branche de fonctionnalité, fusion
-dans `main` une fois validée, puis convergence de `release/mvp-v1` sur le
-même commit et pose d'un tag annoté. Les tags s'incrémentent sur cette unique
-ligne de release ; les précédents ne sont jamais modifiés.
+Modèle de livraison : développement sur une branche courte, fusion dans `main`
+par PR une fois validée, puis pose d'un tag annoté sur `main`. Les tags ne
+vivent que sur le superprojet — ses pointeurs figent déjà les sous-modules — et
+les précédents ne sont jamais modifiés : un jalon corrigé donne un `-rc`
+suivant, il ne réécrit pas le précédent.
 
 ## Hors périmètre actuel
 
