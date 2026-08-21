@@ -157,6 +157,22 @@ services:
       EMAIL_TIMEOUT: ${EMAIL_TIMEOUT:-10}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-ChoirManager <no-reply@example.invalid>}
       EMAIL_REPLY_TO_PLATEFORME: ${EMAIL_REPLY_TO_PLATEFORME:-}
+      # ⚠️ SANS CETTE LIGNE, TOUT EMAIL À BOUTON PART SANS SON LIEN.
+      # `SITE_URL` était défini dans `.env` et documenté dans `.env.example`,
+      # mais n'était transmis par AUCUNE des trois piles : dans un conteneur,
+      # `settings.SITE_URL` valait donc "" en permanence. Les quatre envois qui
+      # en dépendent (vérification d'email, réinitialisation de mot de passe,
+      # approbation de chorale, alertes opérateur) construisent leur lien avec
+      # un `if settings.SITE_URL else ""`, et `_base.html` masque le bouton sur
+      # `{% if cta_url %}` : l'email partait donc SANS lien, sans erreur, sans
+      # trace — le pire des trois. Pour la vérification et le reset, le lien
+      # EST le contenu utile : le message reçu ne servait à rien.
+      SITE_URL: ${SITE_URL:-}
+      # Mêmes variables oubliées, conséquence bien plus douce : elles ont un
+      # défaut sûr dans settings.py (24 h / 30 min), donc les valeurs du `.env`
+      # étaient seulement ignorées en silence, jamais dangereuses.
+      EMAIL_VERIFICATION_TOKEN_MAX_AGE: ${EMAIL_VERIFICATION_TOKEN_MAX_AGE:-86400}
+      PASSWORD_RESET_TOKEN_MAX_AGE: ${PASSWORD_RESET_TOKEN_MAX_AGE:-1800}
     command: ["python", "manage.py", "migrate", "--noinput"]
     networks: [chm]
 

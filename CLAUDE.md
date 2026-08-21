@@ -19,13 +19,16 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.6.0-rc.1`, sur
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.6.0`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
-`mrs-gateway`). Pilote ouvert à la première chorale réelle. Backend et frontend
-passent respectivement ~506 et ~150 tests. `v1.6.0-rc.1` reste un point
-intermédiaire, pas une clôture de jalon : le lot email n'est livré qu'à
-en cours de clôture (bloc A — unicité insensible à la casse — fait ; bloc B
-— vérification — prêt à être livré avant le tag final v1.6.0).
+`mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
+passent respectivement plus de 500 et 171 tests. `v1.6.0` clôt le lot email
+(unicité insensible à la casse + vérification à usage unique). Le chantier
+local suivant est l'autonomie du compte : backend reset self-service,
+`must_change_password` et changement volontaire d'email implémenté et validé ;
+les trois parcours frontend sont également implémentés et validés. La
+livraison/intégration du superprojet reste à faire ; rien de ce chantier local
+n'est encore déployé sur le VPS.
 
 PostgreSQL 17 **et Redis** sous Docker Compose. Trois piles :
 `compose.yaml` (base, prod-like), `+ compose.dev.yaml` (itération),
@@ -473,6 +476,17 @@ timestamp et la demande pendante. La demande est plafonnée par compte dans
 Redis, et l'email part de la plateforme, jamais d'une chorale. Rien ne bloque
 encore un compte non vérifié : le reset self-service sera son premier usage.
 
+**Autonomie du compte (chantier local après v1.6.0).** Le front expose le reset
+public sur le chemin contractuel exact `/auth/reset-mot-de-passe`, puis consomme
+le jeton dans le même écran. Le claim `must_change_password` ferme toute la
+coquille métier via `comptePretGuard` et renvoie vers une surface isolée qui ne
+charge aucune donnée de chorale ; les 403 portant le code machine
+`mot_de_passe_a_changer` appliquent le même repli. `returnUrl` n'accepte qu'une
+route interne absolue, jamais une destination externe. Enfin, `mon-espace`
+affiche l'état réel de vérification et permet le changement d'email global avec
+réauthentification, en reflétant immédiatement la remise à null de la
+vérification.
+
 **Téléphone — format international obligatoire, INDÉPENDANT du pays de la
 chorale.** `Membre.telephone`, `Chorale.telephone`, `DemandeChorale.
 contact_telephone` sont des `PhoneNumberField` (django-phonenumber-field) :
@@ -540,6 +554,22 @@ dans une vue. Emails best-effort : n'utilisent plus `fail_silently=True`
 même promesse tenue autrement : ne jamais faire échouer l'action métier qui
 les déclenche.
 
+**Le gabarit de marque est la NORME, pas une option.** Il n'est rendu que si
+l'appelant fournit `contenu_html` : un envoi qui l'oublie part en texte nu,
+sans erreur ni trace. C'est ainsi que TOUS les emails aux membres sont restés
+en texte nu jusqu'au lot d'uniformisation — `notifier()` ne transmettait aucun
+paramètre HTML, donc les messages que les choristes reçoivent le plus souvent
+étaient les seuls jamais habillés, alors que le gabarit servait déjà aux
+contacts externes. `notifier()` habille désormais l'email lui-même et **dérive
+le bouton du `lien`** déjà fourni pour la notification in-app : les appelants
+n'ont rien à faire, et un futur `par_email=True` sera habillé sans y penser.
+Un nouvel envoi ne doit jamais partir sans `contenu_html` —
+`notifications/tests/test_gabarit_uniforme.py` verrouille la règle.
+
+Deux helpers, à utiliser plutôt que de recomposer :
+`html_depuis_texte(corps)` (échappe puis restitue paragraphes/sauts de ligne)
+et `lien_absolu("/chemin")` (préfixe `SITE_URL`, ou "" si absente).
+
 **HTML — en ALTERNATIVE au texte, jamais à sa place.** `titre_html`/
 `contenu_html`/`cta_label`/`cta_url` (optionnels, sur `notifier`/
 `envoyer_email_externe`) ajoutent une version HTML aux couleurs de la
@@ -554,11 +584,21 @@ côté appelant) : toute chaîne d'origine externe (nom de contact, message d'un
 formulaire public) DOIT y passer avant d'entrer dans le HTML, contrairement au
 texte brut où ce risque n'existe pas.
 
-`SITE_URL` (`chm_config/settings.py`, optionnelle) porte l'origine publique de
-la pile, pour construire les liens absolus d'un email (bouton de connexion,
-lien direct vers une fiche d'admin) — un email n'a pas de requête HTTP dont
-dériver l'hôte. Vide → l'email reste utile (texte toujours complet) mais sans
-bouton cliquable, jamais un lien cassé.
+⚠️ **`SITE_URL` n'est PAS optionnelle en pratique, et doit être transmise par
+Compose.** Elle porte l'origine publique de la pile, pour construire les liens
+absolus d'un email — un email n'a pas de requête HTTP dont dériver l'hôte.
+Elle était définie dans `.env` et documentée dans `.env.example` mais
+transmise par AUCUNE des trois piles : `settings.SITE_URL` valait donc `""`
+dans tout conteneur, production comprise. Toute ligne de `compose.yaml` qui
+disparaîtrait reproduirait le défaut.
+
+L'ancienne formulation — « vide → l'email reste utile, jamais un lien cassé »
+— ne valait que pour l'email d'approbation, dont le texte se suffit. Elle est
+FAUSSE pour la vérification d'adresse et la réinitialisation de mot de passe,
+où le lien EST le contenu utile : sans `SITE_URL`, `_base.html` masque le
+bouton (`{% if cta_url %}`) et le corps texte ne porte aucun lien de secours.
+Le message partait donc complet en apparence, sans erreur ni trace, et sans
+aucun moyen d'agir pour qui le recevait.
 
 **Surfaces publiques qui envoient déjà un email HTML avec CTA** :
 `DemandeChoraleAdmin.approuver_et_provisionner` (bouton « Se connecter » →
@@ -762,8 +802,8 @@ pas ailleurs.
 | --- | --- | --- |
 | 1 | **Test 401 intermittent** (`chm-backend#1`) | Investigué en profondeur (issue à jour) : la piste initiale (threads + `transaction=True`) est RÉFUTÉE. 41 exécutions complètes, une seule reproduction, cause non isolée. Classé « connu, non reproduit, sous surveillance » — revisiter si le symptôme réapparaît en usage réel, avant plusieurs chorales simultanées. |
 | ~~2~~ | ~~**Identité / email vérifié**~~ | **Livré** — email facultatif, unicité insensible à la casse et vérification à usage unique ; prérequis du reset self-service. |
-| 3 | **Reset self-service** | `changer-mot-de-passe` exige l'ancien — ne sert pas à qui l'a perdu. Seul le Bureau dépanne aujourd'hui, et seulement mono-chorale. ⚠️ En attendant : `DemandeChoraleAdmin.approuver_et_provisionner` (`core/admin.py`) envoie le mot de passe généré **en clair par email** au contact fondateur — seul canal existant pour un premier compte. Stopgap documenté, à retirer dès qu'un lien de première connexion à usage unique existe. |
-| 4 | **`must_change_password`** | Un mot de passe temporaire du Bureau reste valable indéfiniment. |
+| 3 | **Autonomie du compte — livraison** | Backend et frontend implémentés localement : reset self-service réservé aux emails vérifiés, lien court signé et idempotent, garde globale `must_change_password`, changement volontaire d'email réauthentifié et trois parcours Angular. Il reste à intégrer les pointeurs du superprojet et livrer le lot après convergence des deux sessions. |
+| ~~4~~ | ~~**`must_change_password` backend**~~ | **Implémenté localement** — mot de passe Bureau/provisionnement généré marqué temporaire ; surface réduite à profil GET, changement du secret et logout jusqu'au choix du titulaire. |
 | 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
 | 6 | **`CHECK_REVOKE_TOKEN`** | Lierait la validité du JWT au hash du mot de passe, ramènerait la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
 | 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. |

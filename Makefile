@@ -17,7 +17,7 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 .PHONY: aide hooks verif-sous-modules env config build up up-api up-frontend up-backend dev down logs ps \
         migrate makemigrations check check-deploy shell dbshell \
         superuser provision seed purge-tokens \
-        test test-backend test-frontend collect front-build \
+        test test-backend test-frontend collect front-build smoke-medias \
         sauvegarde restauration audit-image nettoyage-jetable \
         prod-deploie prod-sauvegarde-pre-deploiement _prod-verifie-progression \
         _prod-check-deploy prod-retour-arriere prod-restauration \
@@ -242,7 +242,7 @@ prod-deploie: ## PROD — déploie un TAG — make prod-deploie TAG=v1.2.0-rc.4
 # POSTGRES_* est résolu DANS le conteneur (`sh -c` en quotes simples) et non sur
 # l'hôte : Make ne lit pas `.env`, donc l'hôte n'a aucune raison d'avoir ces
 # variables. Compose, lui, les injecte. `set -u` a révélé cette dépendance.
-prod-sauvegarde-pre-deploiement:
+prod-sauvegarde-pre-deploiement: ## Dump base + médias avant un déploiement (appelée par prod-deploie)
 	@set -Eeuo pipefail; \
 	mkdir -p backups; \
 	base="backups/pre-$(TAG)-$(HORODATAGE)"; \
