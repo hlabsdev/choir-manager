@@ -19,16 +19,20 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.6.0`, sur
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.7.0-rc.2`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
-passent respectivement plus de 500 et 171 tests. `v1.6.0` clôt le lot email
-(unicité insensible à la casse + vérification à usage unique). Le chantier
-local suivant est l'autonomie du compte : backend reset self-service,
-`must_change_password` et changement volontaire d'email implémenté et validé ;
-les trois parcours frontend sont également implémentés et validés. La
-livraison/intégration du superprojet reste à faire ; rien de ce chantier local
-n'est encore déployé sur le VPS.
+passent respectivement 549 et 171 tests, **suite complète verte**.
+`v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
+à usage unique) ; `v1.7.0-rc.*` ajoute l'autonomie du compte (reset
+self-service, `must_change_password`, changement volontaire d'email, et les
+trois parcours Angular), l'uniformisation des emails au gabarit de marque, la
+transmission de `SITE_URL` par Compose — sans laquelle les emails de
+vérification et de reset partaient **sans lien** — et la tolérance d'horloge
+JWT qui referme le chantier n°1. Le backend du chantier suivant, import Excel
+self-service par le Bureau, est implémenté localement : aperçu sans écriture,
+confirmation revalidée et comptes temporaires / invitations nominatives selon
+l'identité rencontrée. Son frontend et sa livraison restent séparés.
 
 PostgreSQL 17 **et Redis** sous Docker Compose. Trois piles :
 `compose.yaml` (base, prod-like), `+ compose.dev.yaml` (itération),
@@ -96,7 +100,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~506 tests)
+pytest -q                           # suite complète (~549 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
@@ -487,6 +491,25 @@ affiche l'état réel de vérification et permet le changement d'email global av
 réauthentification, en reflétant immédiatement la remise à null de la
 vérification.
 
+**Import Excel de membres (backend local).** Le Bureau télécharge un gabarit
+`.xlsx` sans postes ni groupes RBAC, puis passe obligatoirement par un aperçu
+sans écriture SQL avant une confirmation explicite. L'aperçu est gardé 30
+minutes dans le cache, lié au compte et à la chorale, puis consommé une seule
+fois ; la confirmation revalide chaque ligne contre la base pour fermer la
+course entre les deux étapes. Le fichier est plafonné à 100 lignes (les
+chorales pilotes comptent actuellement au plus 27 membres, donc aucune
+n'approche le seuil d'alerte de 90).
+
+`identifiant` est trimé, sa casse est préservée, mais toutes les comparaisons
+de réimport et le dédoublonnage intra-fichier sont insensibles à la casse. Une
+création passe exclusivement par `membres.services.adherer()` et reçoit son
+secret via `authentication.services.definir_mot_de_passe_temporaire()`, donc
+`must_change_password=True` sans seconde implémentation. Un email appartenant
+à un compte existant hors du tenant suit `InvitationNominative` : aucun
+`Membre`, aucun nouveau `User`, aucune mutation du mot de passe ; seul le
+pupitre est suggéré. Le rapport final distingue invitation créée, email envoyé
+et échec SMTP best-effort.
+
 **Téléphone — format international obligatoire, INDÉPENDANT du pays de la
 chorale.** `Membre.telephone`, `Chorale.telephone`, `DemandeChorale.
 contact_telephone` sont des `PhoneNumberField` (django-phonenumber-field) :
@@ -800,7 +823,7 @@ pas ailleurs.
 
 | # | Chantier | Pourquoi |
 | --- | --- | --- |
-| 1 | **Test 401 intermittent** (`chm-backend#1`) | Investigué en profondeur (issue à jour) : la piste initiale (threads + `transaction=True`) est RÉFUTÉE. 41 exécutions complètes, une seule reproduction, cause non isolée. Classé « connu, non reproduit, sous surveillance » — revisiter si le symptôme réapparaît en usage réel, avant plusieurs chorales simultanées. |
+| ~~1~~ | ~~**Test 401 intermittent** (`chm-backend#1`)~~ | **Résolu — et ce n'était PAS un défaut de test.** L'horloge système RECULE (mesuré : deux reculs de ~1,74 s en 70 s) ; un jeton émis juste avant voit son `iat` passer dans le futur, PyJWT lève `ImmatureSignatureError`, rendue en `"Token is invalid"` → 401. D'où un test DIFFÉRENT touché à chaque exécution, dans n'importe quel module. Corrigé par `SIMPLE_JWT["LEEWAY"] = 10 s` (le défaut de SimpleJWT est 0). Concernait aussi la PRODUCTION : tout hôte saute son horloge (veille, NTP, migration de VM), le symptôme étant un 401 juste après une connexion réussie. Cf. `authentication/tests/test_tolerance_horloge.py` et le § JWT de `chm-backend/README.md`. |
 | ~~2~~ | ~~**Identité / email vérifié**~~ | **Livré** — email facultatif, unicité insensible à la casse et vérification à usage unique ; prérequis du reset self-service. |
 | 3 | **Autonomie du compte — livraison** | Backend et frontend implémentés localement : reset self-service réservé aux emails vérifiés, lien court signé et idempotent, garde globale `must_change_password`, changement volontaire d'email réauthentifié et trois parcours Angular. Il reste à intégrer les pointeurs du superprojet et livrer le lot après convergence des deux sessions. |
 | ~~4~~ | ~~**`must_change_password` backend**~~ | **Implémenté localement** — mot de passe Bureau/provisionnement généré marqué temporaire ; surface réduite à profil GET, changement du secret et logout jusqu'au choix du titulaire. |
@@ -810,6 +833,7 @@ pas ailleurs.
 | ~~8~~ | ~~**Journal d'audit**~~ | **Livré** — app `audit`, cf. section dédiée ci-dessus. |
 | 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
 | 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Audit de vulnérabilités en CI à ajouter. |
+| 11 | **Import Excel — frontend et livraison** | Backend self-service implémenté localement ; l'écran Bureau (gabarit, aperçu, confirmation et restitution ponctuelle des mots de passe) reste à construire dans la session frontend avant intégration/livraison. |
 
 Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
 partitions hors ligne, calendrier externe, notifications push/SMS, module
