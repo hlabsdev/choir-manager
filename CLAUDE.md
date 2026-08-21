@@ -19,20 +19,21 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.7.0-rc.3`, sur
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.7.0`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
-passent respectivement 549 et 171 tests, **suite complète verte**.
+passent respectivement 566 tests (6 ignorés) et 196 tests, **suite complète
+verte**. Le compteur frontend inclut le self-service du profil, implémenté et
+commité localement après `v1.7.0`, mais pas encore publié ni déployé.
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
-à usage unique) ; `v1.7.0-rc.*` ajoute l'autonomie du compte (reset
+à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
 self-service, `must_change_password`, changement volontaire d'email, et les
 trois parcours Angular), l'uniformisation des emails au gabarit de marque, la
 transmission de `SITE_URL` par Compose — sans laquelle les emails de
 vérification et de reset partaient **sans lien** — et la tolérance d'horloge
-JWT qui referme le chantier n°1. Le backend du chantier suivant, import Excel
-self-service par le Bureau, est implémenté localement : aperçu sans écriture,
-confirmation revalidée et comptes temporaires / invitations nominatives selon
-l'identité rencontrée. Son frontend et sa livraison restent séparés.
+JWT qui referme le chantier n°1, ainsi que l'import Excel self-service par le
+Bureau : aperçu sans écriture, confirmation revalidée et comptes temporaires /
+invitations nominatives selon l'identité rencontrée.
 
 PostgreSQL 17 **et Redis** sous Docker Compose. Trois piles :
 `compose.yaml` (base, prod-like), `+ compose.dev.yaml` (itération),
@@ -488,10 +489,11 @@ porte `email_verifie_le` (nul par défaut, donc sans régression pour les
 comptes existants). Les liens sont signés, expirent et sont à usage unique ;
 seule leur empreinte est conservée. Toute écriture de `User.email` invalide le
 timestamp et la demande pendante. La demande est plafonnée par compte dans
-Redis, et l'email part de la plateforme, jamais d'une chorale. Rien ne bloque
-encore un compte non vérifié : le reset self-service sera son premier usage.
+Redis, et l'email part de la plateforme, jamais d'une chorale. L'usage courant
+reste ouvert aux comptes non vérifiés ; le reset self-service est la première
+action qui exige cette vérification.
 
-**Autonomie du compte (chantier local après v1.6.0).** Le front expose le reset
+**Autonomie du compte (livrée dans v1.7.0).** Le front expose le reset
 public sur le chemin contractuel exact `/auth/reset-mot-de-passe`, puis consomme
 le jeton dans le même écran. Le claim `must_change_password` ferme toute la
 coquille métier via `comptePretGuard` et renvoie vers une surface isolée qui ne
@@ -502,7 +504,17 @@ affiche l'état réel de vérification et permet le changement d'email global av
 réauthentification, en reflétant immédiatement la remise à null de la
 vérification.
 
-**Import Excel de membres (backend local).** Le Bureau télécharge un gabarit
+**Self-service du profil (commité localement après v1.7.0, publication en
+attente).** L'écran « Mon espace » permet au titulaire de modifier son prénom
+et son nom globaux (`User`), puis son téléphone, sa photo et son choix de
+partage de contact dans le tenant actif (`Membre`). Lorsqu'une sauvegarde
+répartit des informations entre plusieurs endpoints, les appels restent
+séquentiels si leur ordre influence la cohérence perçue : aucun succès global
+n'est affiché avant la fin, et un échec indique précisément quelle partie a
+déjà été enregistrée. Ne pas remplacer ce parcours par des appels parallèles
+qui masqueraient une sauvegarde partielle.
+
+**Import Excel de membres (livré dans v1.7.0).** Le Bureau télécharge un gabarit
 `.xlsx` sans postes ni groupes RBAC, puis passe obligatoirement par un aperçu
 sans écriture SQL avant une confirmation explicite. L'aperçu est gardé 30
 minutes dans le cache, lié au compte et à la chorale, puis consommé une seule
@@ -836,15 +848,16 @@ pas ailleurs.
 | --- | --- | --- |
 | ~~1~~ | ~~**Test 401 intermittent** (`chm-backend#1`)~~ | **Résolu — et ce n'était PAS un défaut de test.** L'horloge système RECULE (mesuré : deux reculs de ~1,74 s en 70 s) ; un jeton émis juste avant voit son `iat` passer dans le futur, PyJWT lève `ImmatureSignatureError`, rendue en `"Token is invalid"` → 401. D'où un test DIFFÉRENT touché à chaque exécution, dans n'importe quel module. Corrigé par `SIMPLE_JWT["LEEWAY"] = 30 s` (le défaut de SimpleJWT est 0) : facteur > 17 sur le cas mesuré, pour au plus 30 s de validité après `exp`. Au-delà, l'hôte doit finir sa synchronisation plutôt que d'élargir indéfiniment les JWT. Concernait aussi la PRODUCTION : tout hôte saute son horloge (veille, NTP, migration de VM), le symptôme étant un 401 juste après une connexion réussie. Cf. `authentication/tests/test_tolerance_horloge.py` et le § JWT de `chm-backend/README.md`. |
 | ~~2~~ | ~~**Identité / email vérifié**~~ | **Livré** — email facultatif, unicité insensible à la casse et vérification à usage unique ; prérequis du reset self-service. |
-| 3 | **Autonomie du compte — livraison** | Backend et frontend implémentés localement : reset self-service réservé aux emails vérifiés, lien court signé et idempotent, garde globale `must_change_password`, changement volontaire d'email réauthentifié et trois parcours Angular. Il reste à intégrer les pointeurs du superprojet et livrer le lot après convergence des deux sessions. |
-| ~~4~~ | ~~**`must_change_password` backend**~~ | **Implémenté localement** — mot de passe Bureau/provisionnement généré marqué temporaire ; surface réduite à profil GET, changement du secret et logout jusqu'au choix du titulaire. |
+| ~~3~~ | ~~**Autonomie du compte — livraison**~~ | **Livré dans v1.7.0** — reset self-service réservé aux emails vérifiés, lien court signé et idempotent, garde globale `must_change_password`, changement volontaire d'email réauthentifié et trois parcours Angular. |
+| ~~4~~ | ~~**`must_change_password` backend**~~ | **Livré dans v1.7.0** — mot de passe Bureau/provisionnement généré marqué temporaire ; surface réduite à profil GET, changement du secret et logout jusqu'au choix du titulaire. |
 | 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
 | 6 | **`CHECK_REVOKE_TOKEN`** | Lierait la validité du JWT au hash du mot de passe, ramènerait la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
 | 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. |
 | ~~8~~ | ~~**Journal d'audit**~~ | **Livré** — app `audit`, cf. section dédiée ci-dessus. |
 | 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
 | 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Audit de vulnérabilités en CI à ajouter. |
-| 11 | **Import Excel — frontend et livraison** | Backend self-service implémenté localement ; l'écran Bureau (gabarit, aperçu, confirmation et restitution ponctuelle des mots de passe) reste à construire dans la session frontend avant intégration/livraison. |
+| ~~11~~ | ~~**Import Excel — frontend et livraison**~~ | **Livré dans v1.7.0** — écran Bureau avec gabarit, aperçu, confirmation revalidée et restitution ponctuelle des mots de passe temporaires. |
+| 12 | **Self-service du profil — publication** | Frontend implémenté, testé (196 tests) et commité localement : nom, prénom, téléphone, photo et partage de contact. Publication, tag éventuel et déploiement restent à faire. |
 
 Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
 partitions hors ligne, calendrier externe, notifications push/SMS, module
