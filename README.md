@@ -12,9 +12,9 @@ Le produit associe une API Django REST à une interface Angular mobile-first :
   et Vitest.
 
 > **En production depuis le 2 août 2026**, sur https://choirmanager.sankof.tech,
-> pilote ouvert à la première chorale réelle. Le multi-chorale est livré côté
-> backend et frontend, et les suites passent — ~427 tests backend et ~135
-> tests frontend. Chantiers connus, non bloquants pour le pilote : voir
+> pilote ouvert à trois chorales réelles. Le multi-chorale est livré côté
+> backend et frontend, et les suites passent — 566 tests backend (6 ignorés)
+> et 196 tests frontend. Chantiers connus, non bloquants pour le pilote : voir
 > [CLAUDE.md](CLAUDE.md).
 
 Le code, les noms de classes et les champs de base de données sont en anglais.
@@ -33,7 +33,8 @@ Git.
 | Backend | `https://github.com/hlabsdev/chm-backend.git` |
 | Frontend | `https://github.com/hlabsdev/chm-frontend.git` |
 | Ligne de développement | `main` — **unique**, dans les trois dépôts ; les tags s'y posent |
-| Dernier jalon | tag annoté `v1.7.0-rc.3` (autonomie du compte, emails de marque, tolérance d'horloge JWT) |
+| Dernier jalon publié | tag annoté `v1.7.0` (autonomie du compte et import Excel) |
+| Prochaine version préparée | `v1.8.0` — self-service du profil ; tag non posé, non déployée |
 
 Le commit backend/frontend exact figé par un tag se lit sur le pointeur de
 sous-module à ce tag (`git show <tag>:chm-backend`) — ne pas le dupliquer ici,

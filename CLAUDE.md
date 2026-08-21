@@ -23,9 +23,9 @@ rapports. API Django REST + frontend Angular 21.
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
 passent respectivement 566 tests (6 ignorés) et 196 tests, **suite complète
-verte**. Le compteur frontend inclut le self-service du profil, intégré à la
-ligne `main` par le lot en cours de publication après `v1.7.0`, mais pas encore
-inclus dans un nouveau tag ni déployé. La production reste sur `v1.7.0`.
+verte**. Le self-service du profil est publié sur `main` et la prochaine
+version préparée est `v1.8.0` ; son tag n'est pas encore posé et elle n'est pas
+déployée. La production reste sur `v1.7.0`.
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
 self-service, `must_change_password`, changement volontaire d'email, et les
@@ -505,8 +505,8 @@ affiche l'état réel de vérification et permet le changement d'email global av
 réauthentification, en reflétant immédiatement la remise à null de la
 vérification.
 
-**Self-service du profil (intégré à `main` par le lot en cours de publication,
-hors tag et non déployé).** L'écran « Mon espace » permet au titulaire de
+**Self-service du profil (publié sur `main`, version `v1.8.0` préparée mais tag
+non posé et non déployée).** L'écran « Mon espace » permet au titulaire de
 modifier son prénom et son nom globaux (`User`), puis son téléphone, sa photo
 et son choix de partage de contact dans le tenant actif (`Membre`). Lorsqu'une sauvegarde
 répartit des informations entre plusieurs endpoints, les appels restent
@@ -858,7 +858,7 @@ pas ailleurs.
 | 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
 | 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Audit de vulnérabilités en CI à ajouter. |
 | ~~11~~ | ~~**Import Excel — frontend et livraison**~~ | **Livré dans v1.7.0** — écran Bureau avec gabarit, aperçu, confirmation revalidée et restitution ponctuelle des mots de passe temporaires. |
-| 12 | **Self-service du profil — publication** | Frontend implémenté, testé (196 tests) et intégré à la ligne `main` par le lot en cours de publication : nom, prénom, téléphone, photo et partage de contact. Aucun nouveau tag ni déploiement ; la production reste sur `v1.7.0`. |
+| 12 | **Self-service du profil — publication** | Publié sur `main` et préparé pour `v1.8.0` : nom, prénom, téléphone, photo et partage de contact. Tag et déploiement restent à effectuer ; la production reste sur `v1.7.0`. |
 
 Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
 partitions hors ligne, calendrier externe, notifications push/SMS, module
