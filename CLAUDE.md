@@ -19,7 +19,7 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.7.0-rc.2`, sur
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.7.0-rc.3`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
 passent respectivement 549 et 171 tests, **suite complète verte**.
