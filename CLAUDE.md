@@ -2,16 +2,30 @@
 
 Ce fichier guide Claude Code (claude.ai/code) lors de son travail dans ce dépôt.
 
+⚠️ **À mettre à jour à chaque évolution notable** (nouveau lot livré, tag posé,
+chantier ouvert/refermé, décision d'architecture) — dans le MÊME commit ou la
+MÊME session que le changement, pas après coup. Ce fichier n'a de valeur que
+s'il décrit l'état réel : un README qui diverge silencieusement de ce qui
+tourne vraiment est pire que pas de README (c'est exactement ce que la purge
+de `fil-conducteur.md` a fermé, cf. dernière section). Concrètement : état/tag
+en tête de fichier, compteurs de tests, tableau « Chantiers connus » si un
+point avance ou se referme, nouvelle sous-section d'Architecture si un lot
+introduit une règle non triviale qu'un futur Claude devrait connaître avant
+d'y toucher.
+
 ## Projet
 
 ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.3.0-rc.2`, sur
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.6.0-rc.1`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à la première chorale réelle. Backend et frontend
-passent respectivement ~451 et ~135 tests.
+passent respectivement ~506 et ~150 tests. `v1.6.0-rc.1` reste un point
+intermédiaire, pas une clôture de jalon : le lot email n'est livré qu'à
+en cours de clôture (bloc A — unicité insensible à la casse — fait ; bloc B
+— vérification — prêt à être livré avant le tag final v1.6.0).
 
 PostgreSQL 17 **et Redis** sous Docker Compose. Trois piles :
 `compose.yaml` (base, prod-like), `+ compose.dev.yaml` (itération),
@@ -79,7 +93,7 @@ git submodule update --init --recursive`.
 python manage.py runserver          # http://localhost:8000
 python manage.py makemigrations
 python manage.py migrate
-pytest -q                           # suite complète (~276 tests)
+pytest -q                           # suite complète (~506 tests)
 python manage.py check
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
@@ -96,7 +110,7 @@ dev), `WEASYPRINT_DLL_DIR` (GTK sous Windows, pour l'export PDF).
 npm run start        # tailwind build (une fois) + ng serve, http://localhost:4200
 npm run start:dev    # tailwind --watch en tâche de fond + ng serve
 npm run build        # tailwind build + ng build
-npm test             # Vitest (~87 tests)
+npm test             # Vitest (~150 tests)
 ```
 Tailwind v4 n'est **pas** branché sur le pipeline esbuild d'Angular — il est
 compilé explicitement via son CLI avant chaque serve/build. Si les styles
@@ -432,6 +446,90 @@ Pour un **choriste**, pas d'inscription via un `chorale_id` deviné : le Bureau
 génère un code d'invitation (`InvitationChorale`, `membres/models.py`), le
 choriste s'inscrit via `/rejoindre/:code`.
 
+### Unicité de l'email (bloc A) & téléphone au format international
+
+**Email — insensible à la casse, casse préservée à l'écriture.** Contrainte
+posée en index unique partiel sur `LOWER(email)` (`core/migrations/
+0007_email_insensible_casse.py`, SQL brut : `auth.User` n'est pas un modèle
+du dépôt, ses migrations n'ont pas de `Meta.constraints`). Un email vide
+n'est jamais « déjà pris » — le champ reste facultatif, l'index est
+conditionnel (`WHERE email <> ''`) pour la même raison. Point de passage
+unique : `core/services.py::normaliser_email` (trim seul, casse préservée —
+certains fournisseurs la respectent en partie locale) et `email_deja_pris`
+(comparaison `iexact`, `exclure_user_id` pour l'auto-édition). **Six points
+d'écriture** convergent dessus — création/édition par le Bureau, profil
+personnel, inscription par code, `provision_chorale`, `import_members`,
+admin Django (`UserChangeFormEmailUnique`, sans quoi le `ModelForm` ignore
+une contrainte posée hors état des migrations et une collision remonterait
+en `IntegrityError` brute, 500). Conflit signalé par un CODE MACHINE dédié
+(`EmailDejaUtiliseError`, `email_deja_utilise`, 409) plutôt qu'un simple 400
+— le front doit pouvoir distinguer un doublon d'une erreur de saisie.
+
+**Vérification (bloc B).** L'état global `authentication.VerificationEmail`
+porte `email_verifie_le` (nul par défaut, donc sans régression pour les
+comptes existants). Les liens sont signés, expirent et sont à usage unique ;
+seule leur empreinte est conservée. Toute écriture de `User.email` invalide le
+timestamp et la demande pendante. La demande est plafonnée par compte dans
+Redis, et l'email part de la plateforme, jamais d'une chorale. Rien ne bloque
+encore un compte non vérifié : le reset self-service sera son premier usage.
+
+**Téléphone — format international obligatoire, INDÉPENDANT du pays de la
+chorale.** `Membre.telephone`, `Chorale.telephone`, `DemandeChorale.
+contact_telephone` sont des `PhoneNumberField` (django-phonenumber-field) :
+un numéro sans indicatif (`+…`) est refusé, quelle que soit la chorale.
+`Chorale.pays` (nouveau, `django-countries`, ISO 3166-1 alpha-2) est
+PUREMENT informatif — jamais un critère de validation, dans un sens comme
+dans l'autre : un choriste togolais peut avoir un numéro français. Ne
+JAMAIS coupler les deux validations, même « pour aider » — c'est précisément
+le piège que ce lot referme. Stockage E164 (indexable), affichage
+international espacé (`PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"`, ex.
+`+228 90 00 00 00`) : les deux réglages sont **distincts** et ne doivent pas
+être confondus, `PHONENUMBER_DB_FORMAT` reste au défaut E164.
+
+Même helper partagé que l'email : `core/services.py::normaliser_telephone`/
+`valider_telephone` (lève `django.core.exceptions.ValidationError`, à
+charge de l'appelant de la reconvertir dans sa propre convention — `ValueError`
+pour les commandes, `ProvisionnementError` pour `provisionner_chorale`, un
+champ DRF dédié côté serializer).
+
+⚠️ **Piège vérifié en le corrigeant** : un `serializers.SerializerMethodField`
+**ne passe jamais par `to_representation`** — contrairement à un champ DRF
+déclaré, il renvoie sa valeur Python brute telle quelle. Deux endroits
+(`MembreAnnuaireSerializer.get_telephone`, `UserProfileSerializer.
+get_telephone`) renvoyaient l'objet `PhoneNumber` brut, invisible en test
+tant qu'aucun membre du jeu de données n'avait de téléphone renseigné —
+l'annuaire et le profil plantaient en 500 dès le premier cas réel. Tout
+`SerializerMethodField` qui expose un `PhoneNumberField` doit `str()`
+explicitement sa valeur.
+
+De la même façon, `ModelSerializer` **ne mappe PAS automatiquement**
+`PhoneNumberField` vers son équivalent DRF — la génération auto retombe sur
+un `CharField` nu (marche en lecture via `str()`, mais AUCUNE validation de
+format à l'écriture). Tout champ `telephone`/`contact_telephone` sur un
+serializer doit être redéclaré explicitement avec
+`phonenumber_field.serializerfields.PhoneNumberField`.
+
+**Migration de correction de données** (`membres/migrations/
+0011_corrige_telephones_locaux_togo.py`, AVANT l'`AlterField` du champ) :
+règle générique, pas une liste figée de matricules — tout `telephone` non
+vide qui ne commence pas par `+` est préfixé `+228` (déploiement togolais,
+cf. `TIME_ZONE`) puis revalidé ; jamais forcé aveuglément, une valeur encore
+invalide après préfixage est laissée telle quelle plutôt que corrompue. Un
+nouveau déploiement dans un autre pays qui hériterait de données locales non
+conformes doit écrire l'équivalent avec SON indicatif — ne pas réutiliser
+« +228 » en dur pour un contexte différent.
+
+**Frontend** : `shared/components/telephone-input/` (indicatif + drapeau
+emoji dérivé du code ISO — deux symboles indicateurs régionaux Unicode,
+calculés à la volée, aucune image ni dépendance npm) sur les 3 écrans qui
+éditent un téléphone (fiche membre, `rejoindre`, `demande-chorale`).
+`shared/data/pays-indicatifs.ts` (242 entrées) généré depuis les MÊMES
+bibliothèques que le backend (`phonenumbers` + `django_countries`), jamais
+transcrit à la main — un référentiel qui diverge entre front et back donnerait
+un indicatif accepté d'un côté et rejeté de l'autre, silencieusement. `profil.
+component.ts` n'expose aujourd'hui aucune édition de téléphone — rien à y
+brancher tant que cet écran n'en a pas besoin.
+
 ### Notifications — point d'entrée unique
 
 `notifications/services.py` (`notifier`, `notifier_groupe`,
@@ -663,7 +761,7 @@ pas ailleurs.
 | # | Chantier | Pourquoi |
 | --- | --- | --- |
 | 1 | **Test 401 intermittent** (`chm-backend#1`) | Investigué en profondeur (issue à jour) : la piste initiale (threads + `transaction=True`) est RÉFUTÉE. 41 exécutions complètes, une seule reproduction, cause non isolée. Classé « connu, non reproduit, sous surveillance » — revisiter si le symptôme réapparaît en usage réel, avant plusieurs chorales simultanées. |
-| 2 | **Identité / email vérifié** | Prérequis d'un reset self-service : email facultatif, non vérifié, unicité insensible à la casse absente. |
+| ~~2~~ | ~~**Identité / email vérifié**~~ | **Livré** — email facultatif, unicité insensible à la casse et vérification à usage unique ; prérequis du reset self-service. |
 | 3 | **Reset self-service** | `changer-mot-de-passe` exige l'ancien — ne sert pas à qui l'a perdu. Seul le Bureau dépanne aujourd'hui, et seulement mono-chorale. ⚠️ En attendant : `DemandeChoraleAdmin.approuver_et_provisionner` (`core/admin.py`) envoie le mot de passe généré **en clair par email** au contact fondateur — seul canal existant pour un premier compte. Stopgap documenté, à retirer dès qu'un lien de première connexion à usage unique existe. |
 | 4 | **`must_change_password`** | Un mot de passe temporaire du Bureau reste valable indéfiniment. |
 | 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
