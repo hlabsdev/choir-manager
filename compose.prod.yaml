@@ -6,6 +6,10 @@ services:
     # Supprime réellement la publication héritée de compose.yaml. Le seul
     # point d'entrée public est mrs-gateway.
     ports: !reset []
+    # Défense en profondeur : Nginx non privilégié n'a aucune raison de
+    # pouvoir gagner des privilèges via un binaire setuid.
+    security_opt:
+      - no-new-privileges:true
     networks:
       - chm
       - mrs-gateway
@@ -13,6 +17,21 @@ services:
       - /srv/chm/media:/usr/share/nginx/media:ro
 
   backend:
+    # ⚠️ FORCÉ ICI, ET NON SEULEMENT DANS `.env`.
+    # `.env.example` est orienté poste de développement (pile locale en HTTP) :
+    # il porte DJANGO_COOKIE_SECURE=False et
+    # DJANGO_ACCEPT_INSECURE_COOKIES=True. Recopié tel quel sur le VPS, il
+    # faisait circuler en clair les cookies de session de l'admin Django — la
+    # cause exacte du constat A-07 de docs/AUDIT_SECURITE_V2.md. L'override de
+    # production reprend la main : ces deux valeurs ne peuvent plus être
+    # dégradées par un fichier `.env` copié depuis un poste de dev. TLS est
+    # terminé par mrs-gateway, donc les cookies `Secure` fonctionnent.
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_COOKIE_SECURE: "True"
+      DJANGO_ACCEPT_INSECURE_COOKIES: "False"
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - /srv/chm/media:/app/media
 

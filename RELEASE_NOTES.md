@@ -1,5 +1,119 @@
 # Notes de version — ChoirManager
 
+## `v2.0.0` — « Chœur », refonte visuelle et sécurité by design
+
+Date de préparation : 11 novembre 2026
+
+**Statut : version préparée sur la branche `feat/v2-refonte` (superprojet et
+sous-modules), tag non posé, non déployée.** La production reste sur `v1.7.0`.
+
+Cette version est une **majeure** : elle ne se contente pas d'ajouter des
+écrans, elle remplace l'identité visuelle, referme une partie des chantiers de
+sécurité connus et livre des fonctions attendues de longue date. Le périmètre
+technique reste Django REST + Angular 21 ; le langage de marque devient
+**« Chœur » (ChoirManager 2.0)**.
+
+### 1. Refonte visuelle complète — « Papier & scène »
+
+Nouvelle direction artistique, documentée dans
+[docs/DESIGN_V2.md](docs/DESIGN_V2.md) et vérifiée par captures dans
+[docs/captures/](docs/captures/) :
+
+- **Design system réécrit** : palette vert pin / corail terre cuite / ivoire /
+  encre chaude, typographie éditoriale **Fraunces** (titres, chiffres) et
+  **Inter** (interface) **auto-hébergées** — plus aucune requête vers Google
+  Fonts, donc compatible avec la CSP stricte ; rayons, ombres, badges, champs,
+  tableaux, modales, skeletons et états vides restylés.
+- **Coquille inédite** : rail latéral repliable (260 → 80 px, préférence
+  mémorisée), carte de chorale, navigation groupée avec indicateur corail,
+  barre supérieure avec fil d'Ariane et **palette de commandes `Ctrl/⌘ K`**,
+  barre inférieure mobile à cinq destinations dont un bouton de pointage
+  surélevé.
+- **Écrans refondus** : page publique d'accueil éditoriale (aperçu produit
+  dessiné en CSS, sans image), connexion en split éditorial, tableau de bord
+  hiérarchisé (prochaine répétition, anneau d'assiduité, caisse, cotisations,
+  agenda, activité), liste et fiche membres, structure, import Excel, séances
+  et **pointage mobile à grandes zones tactiles**, répertoire et lecteur média,
+  finances (solde, graphique, journal), cotisations, annonces, notifications,
+  rapports imprimables, espace opérateur, profil.
+- **Cohérence** : une seule échelle typographique, des libellés français, des
+  états chargement/vide/erreur explicites sur chaque écran, focus visible,
+  contrastes AA et respect de `prefers-reduced-motion`.
+
+### 2. Audit de sécurité et correctifs
+
+Rapport complet : [docs/AUDIT_SECURITE_V2.md](docs/AUDIT_SECURITE_V2.md)
+(30 constats : 3 critiques, 9 élevés, 12 moyens, 6 faibles ; 4 faux positifs
+écartés, 8 corrigés pendant l'audit).
+
+Correctifs livrés :
+
+- **CSP stricte et en-têtes de sécurité** sur les documents HTML (Nginx) et
+  sur toutes les réponses Django (middleware) : `default-src 'self'`,
+  `script-src 'self'`, `frame-ancestors 'none'`, COOP/CORP,
+  `Referrer-Policy`, `Permissions-Policy` ; l'admin Django a été rendu
+  compatible (script inline externalisé, polices système).
+- **JWT révocable après changement de mot de passe** (`CHECK_REVOKE_TOKEN` via
+  claim `pwdv` salé) : la fenêtre résiduelle de 30 minutes tombe à zéro.
+- **Déconnexion réellement révoquante** : le front appelle enfin
+  `POST /auth/logout/` avant d'effacer le stockage — un refresh copié ne reste
+  plus valide 7 jours.
+- **Injection de formule CSV** neutralisée sur les exports de rapports et le
+  journal d'audit ; échappement HTML des rendus WeasyPrint vérifié.
+- **Fuite cross-tenant du pointage** fermée : un `membre_id` d'une autre
+  chorale est désormais refusé.
+- **`DJANGO_SECRET_KEY=change-me` refusé hors développement** (les
+  placeholders documentés ne sont plus des secrets acceptés).
+- **Données personnelles** : le CSV de membres réels n'est plus suivi par Git
+  (`git rm --cached`, procédure de purge d'historique dans le rapport) ;
+  l'adresse email personnelle codée dans le bundle et celle du script d'alerte
+  ops sont sorties du code.
+- **Ops/CI** : cookies `Secure` forcés en production, `no-new-privileges`,
+  `FRONTEND_BIND=127.0.0.1`, dumps `umask 077`, email d'alerte en variable
+  d'environnement, mot de passe du smoke test aléatoire et nettoyé,
+  `permissions: contents: read` + audit `pip-audit`/`npm audit` en CI.
+
+### 3. Améliorations produit et exploitation
+
+- **Portabilité des données (RGPD)** : `manage.py export_chorale --chorale <id>
+  --sortie <fichier.json>` produit un export JSON complet et journalisé du
+  tenant, sans aucun secret.
+- **Observabilité** : `X-Request-ID` accepté/émis sur chaque réponse, corrélé à
+  un log JSON structuré (méthode, chemin, statut, durée, utilisateur).
+- **Pointage par le chef de pupitre** : autorisé, strictement borné à son
+  pupitre (`Poste.pupitre_concerne`) — décision produit documentée et testée.
+- **Expérience** : palette de commandes, recherche et filtres en chips,
+  graphiques sans dépendance, impression des rapports, fiches plus lisibles,
+  confirmations explicites, meilleurs états vides.
+
+### Validation
+
+- **Backend** : `pytest -q` → **602 tests réussis, 6 ignorés, 0 échec** (61 s,
+  PostgreSQL remplacé par SQLite + LocMem faute de Docker sur le poste de
+  préparation) ; `manage.py check` et `makemigrations --check` propres.
+- **Frontend** : `ng test --watch=false` → **29 fichiers, 196 tests réussis** ;
+  build de production **réussi**.
+- **Captures** : 13 écrans desktop/mobile dans [docs/captures/](docs/captures/),
+  générées sur le build de production avec le jeu de démo réel,
+  **zéro erreur console**.
+
+### Limites connues de cette préparation
+
+- Les jetons restent dans `localStorage` (le correctif complet — cookie
+  httpOnly — est un chantier séparé) ; la CSP et la révocation à la
+  déconnexion réduisent fortement l'exposition sans l'annuler.
+- MFA non livrée ; `pip-audit`/`npm audit` signale encore des vulnérabilités
+  dans la chaîne de build Angular (correctifs disponibles, à planifier).
+- Pas d'API plateforme « chorales » : l'espace opérateur renvoie vers l'admin
+  Django, sans données inventées. Les « sessions actives » du profil ne sont
+  pas exposées par l'API.
+- Tests exécutés sous SQLite/LocMem (pas de PostgreSQL/Redis/Docker sur le
+  poste) ; génération PDF non rejouée (DLL GTK absentes).
+- Aucun tag, aucun déploiement : le retour arrière consiste à revenir sur
+  `main`.
+
+---
+
 ## `v1.8.0` — self-service du profil
 
 Date de préparation : 21 août 2026

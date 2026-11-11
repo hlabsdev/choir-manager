@@ -27,6 +27,48 @@ BASE="${SMOKE_BASE_URL:-http://127.0.0.1:8080}"
 ROUGE=$'\e[31m'; VERT=$'\e[32m'; GRAS=$'\e[1m'; FIN=$'\e[0m'
 echecs=0
 
+# --- Compte de smoke : secret ALÉATOIRE et nettoyage en sortie -------------
+# Le compte de smoke est un compte RÉEL de la base. Son mot de passe ne doit
+# jamais être une constante versionnée (il l'était : `SmokeMedias2026!`,
+# publié dans l'historique Git), et le compte ne doit pas survivre au test.
+# Secret aléatoire par exécution, jamais affiché, et compte neutralisé en
+# sortie (mot de passe rendu inutilisable) — y compris si le script échoue.
+MOT_DE_PASSE=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
+
+nettoyer() {
+  code=$?
+  # Désarme le piège avant d'agir, pour ne pas le rejouer sur une erreur de
+  # nettoyage (le `|| true` couvre déjà l'échec de Docker).
+  trap - EXIT
+  docker compose exec -T backend python manage.py shell \
+    -c "import sys; exec(sys.stdin.read())" >/dev/null 2>&1 <<'PY' || true
+from django.contrib.auth.models import User
+from core.models import Chorale
+from musique.models import Chant, Partition
+
+chorale = Chorale.objects.filter(prefix="SMK").first()
+if chorale is not None:
+    for partition in Partition.objects.filter(chorale=chorale, titre="Smoke"):
+        if partition.fichier:
+            partition.fichier.delete(save=False)
+        partition.delete()
+    Chant.objects.filter(chorale=chorale, titre="Smoke").delete()
+
+user = User.objects.filter(username="smoke_medias").first()
+if user is not None:
+    from membres.models import Membre
+    for membre in Membre.objects.filter(user=user):
+        membre.soft_delete()
+    # Remplace le hash du secret aléatoire : plus aucun mot de passe utilisable,
+    # même si le compte n'a pas pu être supprimé (relations protégées).
+    user.set_unusable_password()
+    user.is_active = False
+    user.save(update_fields=["password", "is_active"])
+PY
+  exit "$code"
+}
+trap nettoyer EXIT
+
 etape()  { printf '\n%s▸ %s%s\n' "$GRAS" "$1" "$FIN"; }
 ok()     { printf '  %s✓%s %s\n' "$VERT" "$FIN" "$1"; }
 echec()  { printf '  %s✗ %s%s\n' "$ROUGE" "$1" "$FIN"; echecs=$((echecs + 1)); }
@@ -34,8 +76,8 @@ echec()  { printf '  %s✗ %s%s\n' "$ROUGE" "$1" "$FIN"; echecs=$((echecs + 1));
 # ---------------------------------------------------------------------------
 etape "Préparation du jeu d'essai (chorale, membre, partition avec fichier)"
 
-PREP=$(docker compose exec -T backend python manage.py shell -c "
-import io, json
+PREP=$(docker compose exec -T -e SMOKE_PASSWORD="$MOT_DE_PASSE" backend python manage.py shell -c "
+import io, json, os
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import User
 from core.models import Chorale
@@ -47,11 +89,14 @@ CONTENU = b'%PDF-1.4 smoke-medias contenu unique 4f2a9c\n'
 
 chorale, _ = Chorale.objects.get_or_create(
     prefix='SMK', defaults={'nom': 'Smoke Test', 'date_creation': '2020-01-01'})
-user, cree = User.objects.get_or_create(
+# Réinitialisation SYSTÉMATIQUE : une exécution interrompue peut avoir laissé
+# ce compte avec un autre secret, ou inactif. Le secret vient de
+# l'environnement, jamais du code versionné.
+user, _ = User.objects.get_or_create(
     username='smoke_medias', defaults={'email': 'smoke@example.invalid'})
-if cree:
-    user.set_password('SmokeMedias2026!')
-    user.save()
+user.set_password(os.environ['SMOKE_PASSWORD'])
+user.is_active = True
+user.save(update_fields=['password', 'is_active'])
 if not Membre.objects.filter(user=user, chorale=chorale).exists():
     adherer(user, chorale)
 
@@ -84,7 +129,7 @@ etape "Connexion à travers Nginx"
 
 JETON=$(curl -sS -X POST "$BASE/api/auth/login/" \
     -H 'Content-Type: application/json' \
-    -d '{"username":"smoke_medias","password":"SmokeMedias2026!"}' \
+    -d "{\"username\":\"smoke_medias\",\"password\":\"$MOT_DE_PASSE\"}" \
     | python3 -c 'import sys,json; print(json.load(sys.stdin).get("access",""))')
 
 [ -n "$JETON" ] && ok "jeton obtenu" || { echec "connexion impossible"; exit 1; }

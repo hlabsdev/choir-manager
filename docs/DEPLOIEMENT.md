@@ -665,6 +665,36 @@ production** : utiliser un rôle de test distinct.
 make sauvegarde         # → backups/choirmanager-<horodatage>.dump
 ```
 
+#### Adresse des alertes de sauvegarde — OBLIGATOIRE
+
+Le script `ops/backup/alert-backup.sh` n'embarque plus d'adresse en dur : il
+exige `BACKUP_ALERT_EMAIL` et échoue explicitement sans elle. L'adresse vit
+dans un fichier root:root `600`, hors dépôt :
+
+```bash
+sudo install -d -m 700 /etc/choirmanager
+sudo tee /etc/choirmanager/backup.env >/dev/null <<'EOF'
+BACKUP_ALERT_EMAIL=alerte-sauvegarde@votre-domaine
+EOF
+sudo chmod 600 /etc/choirmanager/backup.env
+```
+
+Les unités `choirmanager-backup.service` et
+`choirmanager-backup-freshness.service` le chargent via
+`EnvironmentFile=-/etc/choirmanager/backup.env`. En appel manuel
+(`make prod-sauvegarde`), exporter la variable ou sourcer ce fichier ;
+
+```bash
+set -a; . /etc/choirmanager/backup.env; set +a
+make prod-sauvegarde
+```
+
+Cette adresse est une **donnée personnelle d'exploitation** : ne la remettez
+jamais dans un fichier versionné (c'était le cas, cf.
+`docs/AUDIT_SECURITE_V2.md`). Les dumps écrits par `make sauvegarde` et par
+`prod-deploie` sont créés avec `umask 077` (lisibles par root seulement) : ils
+contiennent l'intégralité des données personnelles de la plateforme.
+
 Les médias sont dans le volume `media_data` et doivent être sauvegardés
 séparément :
 

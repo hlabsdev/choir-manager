@@ -34,11 +34,30 @@ Git.
 | Frontend | `https://github.com/hlabsdev/chm-frontend.git` |
 | Ligne de développement | `main` — **unique**, dans les trois dépôts ; les tags s'y posent |
 | Dernier jalon publié | tag annoté `v1.7.0` (autonomie du compte et import Excel) |
-| Prochaine version préparée | `v1.8.0` — self-service du profil ; tag non posé, non déployée |
+| Version préparée en cours | **`v2.0.0`** — refonte visuelle « Chœur » et sécurité by design, sur la branche `feat/v2-refonte` ; tag non posé, non déployée |
 
 Le commit backend/frontend exact figé par un tag se lit sur le pointeur de
 sous-module à ce tag (`git show <tag>:chm-backend`) — ne pas le dupliquer ici,
 il diverge à chaque nouveau tag.
+
+## Version 2.0 — « Chœur » {#version-2}
+
+La branche `feat/v2-refonte` prépare une version majeure :
+
+- **refonte visuelle complète** — identité « Papier & scène » (vert pin, corail,
+  ivoire), Fraunces + Inter auto-hébergées, nouvelle coquille, palette de
+  commandes, dashboard, pointage mobile et tous les modules restylés
+  ([docs/DESIGN_V2.md](docs/DESIGN_V2.md), captures dans
+  [docs/captures/](docs/captures/)) ;
+- **sécurité by design** — CSP stricte, JWT révocable au changement de mot de
+  passe, déconnexion qui révoque réellement le refresh, neutralisation des
+  injections CSV, fermeture d'une fuite cross-tenant du pointage, audit complet
+  ([docs/AUDIT_SECURITE_V2.md](docs/AUDIT_SECURITE_V2.md)) ;
+- **améliorations produit** — export RGPD du tenant, observabilité par
+  `X-Request-ID`, pointage par le chef de pupitre borné à son pupitre.
+
+Le détail, les résultats de tests (602 backend / 196 frontend) et les limites
+sont dans [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 ## Site en ligne
 

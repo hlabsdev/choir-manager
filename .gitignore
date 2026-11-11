@@ -30,7 +30,10 @@ backups/
 volumes/
 
 # Imports opérationnels contenant des données personnelles réelles.
+# ⚠️ Cette règle n'a AUCUN effet rétroactif : un fichier déjà suivi reste suivi
+# (c'est le cas de docs/membres_hdgab.csv, cf. docs/AUDIT_SECURITE_V2.md).
 docs/membres_*.csv
+docs/membres_*.xlsx
 
 # Fichiers système
 .DS_Store

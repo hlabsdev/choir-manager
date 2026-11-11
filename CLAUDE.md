@@ -23,9 +23,21 @@ rapports. API Django REST + frontend Angular 21.
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
 passent respectivement 566 tests (6 ignorés) et 196 tests, **suite complète
-verte**. Le self-service du profil est publié sur `main` et la prochaine
-version préparée est `v1.8.0` ; son tag n'est pas encore posé et elle n'est pas
-déployée. La production reste sur `v1.7.0`.
+verte**. Le self-service du profil est publié sur `main`.
+
+**`v2.0.0` « Chœur » préparée sur la branche `feat/v2-refonte`** (superprojet
+et sous-modules), **tag non posé, non déployée** : refonte visuelle complète
+(identité « Papier & scène », polices auto-hébergées, nouvelle coquille,
+palette de commandes, tous les écrans restylés — cf.
+[docs/DESIGN_V2.md](docs/DESIGN_V2.md) et [docs/captures/](docs/captures/)),
+sécurité by design (CSP stricte, JWT révocable `pwdv`, déconnexion qui révoque
+le refresh, injection CSV neutralisée, fuite cross-tenant du pointage fermée,
+audit complet dans [docs/AUDIT_SECURITE_V2.md](docs/AUDIT_SECURITE_V2.md)),
+export RGPD du tenant, observabilité `X-Request-ID`, pointage par le chef de
+pupitre borné à son pupitre. Validation : **602 tests backend** (6 ignorés,
+sous SQLite faute de Docker), **196 tests frontend**, build de production vert.
+La production reste sur `v1.7.0` jusqu'au tag et au déploiement de `v2.0.0`.
+
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
 self-service, `must_change_password`, changement volontaire d'email, et les
@@ -737,9 +749,17 @@ utilitaires Tailwind : `.btn` (+ `.btn-primary|secondary|ghost|danger|accent`,
 `.btn-sm|lg`, `.btn-icon`), `.card`/`.glass-card`, `.field`/`.label`/`.input`
 (+ `.select`, `.switch`, `.segmented`, `.range`, `.check`/`.radio`), `.badge`
 (+ variantes sémantiques), `.modal-overlay`/`.modal-panel`,
-`.page-title`/`.page-subtitle`/`.section-title`. Palette indigo (primaire) /
-ambre (accent). Choisir le contrôle de formulaire selon la donnée : booléen →
-switch, petit choix exclusif → segmented, liste → select, plage → slider.
+`.page-title`/`.page-subtitle`/`.section-title`. **v2.0.0** remplace la palette
+indigo/ambre par l'identité « Papier & scène » : vert pin (`primary-*`), corail
+(`accent-*`), ivoire/encre, typographies **Fraunces** (affichage) et **Inter**
+(interface) auto-hébergées (`public/fonts/`), plus les classes de coquille
+`.shell`/`.sidebar`/`.topbar`/`.bottom-nav`/`.nav-*`/`.command-*` et les
+variantes `.card-pin|gold|coral|ink`, `.staff-rule`, `.eyebrow`, `.agenda-*`
+(cf. [docs/DESIGN_V2.md](docs/DESIGN_V2.md)). ⚠️ Les règles d'élément non
+layerisées priment sur les utilitaires Tailwind : ne pas y remettre de
+couleur, sinon un `text-primary-50` sur panneau sombre devient illisible.
+Choisir le contrôle de formulaire selon la donnée : booléen → switch, petit
+choix exclusif → segmented, liste → select, plage → slider.
 
 ## Conventions
 
@@ -838,6 +858,13 @@ besoin exprimé au lancement du module laissait la porte ouverte (« le cas
 encore tranché comme un choix produit définitif — à trancher si le besoin se
 confirme, pas à « corriger » sans validation.
 
+**Tranché et livré dans v2.0.0** : le chef de pupitre peut pointer, mais
+**strictement** les membres de son pupitre, délimité par
+`Poste.pupitre_concerne` (`core/permissions.py::PeutPointer`,
+`presences/views.py`, `presences/serializers.py`), avec tests de cloisonnement.
+Au passage, un `membre_id` d'une autre chorale est désormais refusé (fuite
+cross-tenant fermée).
+
 ## Chantiers connus, non bloquants
 
 Aucun n'empêche le pilote d'utiliser l'outil. Ordre de risque décroissant,
@@ -851,12 +878,12 @@ pas ailleurs.
 | ~~2~~ | ~~**Identité / email vérifié**~~ | **Livré** — email facultatif, unicité insensible à la casse et vérification à usage unique ; prérequis du reset self-service. |
 | ~~3~~ | ~~**Autonomie du compte — livraison**~~ | **Livré dans v1.7.0** — reset self-service réservé aux emails vérifiés, lien court signé et idempotent, garde globale `must_change_password`, changement volontaire d'email réauthentifié et trois parcours Angular. |
 | ~~4~~ | ~~**`must_change_password` backend**~~ | **Livré dans v1.7.0** — mot de passe Bureau/provisionnement généré marqué temporaire ; surface réduite à profil GET, changement du secret et logout jusqu'au choix du titulaire. |
-| 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
-| 6 | **`CHECK_REVOKE_TOKEN`** | Lierait la validité du JWT au hash du mot de passe, ramènerait la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
-| 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. |
+| ~~5~~ | ~~**CSP stricte**~~ | **Livré dans v2.0.0 (branche `feat/v2-refonte`)** — CSP stricte sur les documents HTML (Nginx) et toutes les réponses Django (`core/middleware_securite.py`, testée) ; l'admin a été rendu compatible (script inline externalisé, polices système). ⚠️ Les JWT restent dans `localStorage` : la CSP réduit la surface XSS, elle ne remplace pas un stockage en cookie httpOnly — chantier de fond restant. |
+| ~~6~~ | ~~**`CHECK_REVOKE_TOKEN`**~~ | **Livré dans v2.0.0** — claim `pwdv` (empreinte salée du hash courant) dans le refresh puis revérifié à chaque requête ; changer son mot de passe invalide immédiatement tous les access émis avant (fenêtre résiduelle 30 min → 0). Testé : ancien access 401, nouveau 200, jeton sans claim refusé. |
+| 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. Non livré. |
 | ~~8~~ | ~~**Journal d'audit**~~ | **Livré** — app `audit`, cf. section dédiée ci-dessus. |
-| 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
-| 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Audit de vulnérabilités en CI à ajouter. |
+| ~~9~~ | ~~**Observabilité**~~ | **Partiellement livré dans v2.0.0** — `X-Request-ID` accepté/émis sur toute réponse et log JSON structuré corrélé ; restent la remontée centralisée et les alertes. |
+| 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. **v2.0.0 ajoute l'audit `pip-audit`/`npm audit` en CI**, mais ne verrouille pas encore les versions (l'audit frontend relève 52 avis, dont 3 critiques dans la chaîne de build — correctifs à planifier). |
 | ~~11~~ | ~~**Import Excel — frontend et livraison**~~ | **Livré dans v1.7.0** — écran Bureau avec gabarit, aperçu, confirmation revalidée et restitution ponctuelle des mots de passe temporaires. |
 | 12 | **Self-service du profil — publication** | Publié sur `main` et préparé pour `v1.8.0` : nom, prénom, téléphone, photo et partage de contact. Tag et déploiement restent à effectuer ; la production reste sur `v1.7.0`. |
 

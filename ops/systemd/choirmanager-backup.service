@@ -5,6 +5,14 @@ After=docker.service network-online.target
 
 [Service]
 Type=oneshot
+# Adresse de secours des alertes de sauvegarde (BACKUP_ALERT_EMAIL).
+# Fichier root:root 600, non versionné — cf. docs/DEPLOIEMENT.md §7.
+# Le préfixe `-` rend le fichier optionnel : sans lui, l'unité refuserait de
+# démarrer alors que la sauvegarde elle-même n'a pas besoin de cette adresse.
+EnvironmentFile=-/etc/choirmanager/backup.env
+# Les scripts pilotent Docker et rclone en root ; aucun setuid/setgid n'est
+# nécessaire, on interdit donc d'en gagner.
+NoNewPrivileges=true
 ExecStart=/root/choir-manager/ops/backup/backup.sh
 Nice=10
 IOSchedulingClass=best-effort

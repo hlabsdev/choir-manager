@@ -139,7 +139,10 @@ front-build: ## Build Angular de production (dans l'image)
 # Sauvegarde / restauration (§12)
 # ---------------------------------------------------------------------------
 sauvegarde: ## Dump PostgreSQL horodaté dans backups/
-	@mkdir -p backups
+	# `umask 077` : un dump contient TOUTES les données personnelles de la
+	# plateforme. Sans cela le fichier naît en 0644, lisible par tout compte
+	# local, dans un répertoire `backups/` lui-même en 0755.
+	@umask 077; mkdir -p backups; \
 	$(COMPOSE) exec -T db pg_dump -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -Fc \
 	  > "backups/choirmanager-$(HORODATAGE).dump"
 	@echo "→ backups/choirmanager-$(HORODATAGE).dump"
@@ -244,6 +247,7 @@ prod-deploie: ## PROD — déploie un TAG — make prod-deploie TAG=v1.2.0-rc.4
 # variables. Compose, lui, les injecte. `set -u` a révélé cette dépendance.
 prod-sauvegarde-pre-deploiement: ## Dump base + médias avant un déploiement (appelée par prod-deploie)
 	@set -Eeuo pipefail; \
+	umask 077; \
 	mkdir -p backups; \
 	base="backups/pre-$(TAG)-$(HORODATAGE)"; \
 	$(COMPOSE_PROD) exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > "$$base.dump"; \
