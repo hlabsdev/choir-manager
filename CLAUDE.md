@@ -38,6 +38,14 @@ pupitre borné à son pupitre. Validation : **602 tests backend** (6 ignorés,
 sous SQLite faute de Docker), **196 tests frontend**, build de production vert.
 La production reste sur `v1.7.0` jusqu'au tag et au déploiement de `v2.0.0`.
 
+**`v2.0.1` — correctifs de recette** (même branche) : médias privés servis
+directement en dev sans Nginx, aperçu de partition en modale, sérialiseur de
+liste des répétitions exposant `resume`, auto-édition `partage_contact` pour
+un membre du staff, compteurs de pupitres (`nombre_membres`), filtre « Sans
+pupitre », organigramme en bandes, diagnostic PDF `manage.py verifier_pdf`,
+origines CSRF de développement + normalisation `Origin: null` (DEBUG
+uniquement), et nommage « Chœur » harmonisé.
+
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
 self-service, `must_change_password`, changement volontaire d'email, et les

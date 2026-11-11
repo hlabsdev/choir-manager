@@ -778,3 +778,51 @@ make audit-image        # ni .env, ni SQLite, ni .git, ni venv dans les images
 | 502 sur `/api/` | backend non sain ; `make logs` puis `curl` sur `/api/core/health/` |
 | Export PDF en 503 | libs GTK/Pango absentes — présentes dans l'image, à vérifier hors conteneur |
 | Styles figés | Tailwind v4 se compile hors du pipeline Angular : relancer `npm run tailwind` |
+
+## 11. Export PDF — reproductibilité dev et prod
+
+Les rapports PDF utilisent **WeasyPrint**, qui charge Pango/Cairo/GDK-Pixbuf
+via ctypes **au runtime**. Une installation Python réussie ne suffit donc pas :
+sans ces bibliothèques, l'export répond 503 « dépendances serveur manquantes »
+alors que le CSV continue de fonctionner.
+
+Diagnostic reproductible, sur tout environnement :
+
+```bash
+# pile Docker
+make verif-pdf
+# ou directement
+docker compose exec -T backend python manage.py verifier_pdf
+```
+
+Sortie 0 + taille du PDF = chaîne opérationnelle. Sortie 1 = le remède exact
+est affiché (paquets Linux, runtime GTK Windows, variable `WEASYPRINT_DLL_DIR`).
+
+**Production / Docker** : `chm-backend/Dockerfile` installe déjà `libpango`,
+`libpangocairo`, `libpangoft2`, `libgdk-pixbuf`, `libcairo2` et
+`fonts-dejavu-core`. Reconstruire l'image (`make build`) suffit.
+
+**Poste Windows (dev hors Docker)** : installer le runtime GTK 3
+(https://github.com/tschoonj/GTK-for-Windows-Runtime-Installer), puis exporter
+`WEASYPRINT_DLL_DIR` vers son dossier `bin` avant `runserver` :
+
+```powershell
+$env:WEASYPRINT_DLL_DIR = "C:\Program Files\GTK3-Runtime Win64\bin"
+```
+
+Sans cela, l'écran Rapports affiche le message d'indisponibilité et le CSV
+reste la voie de secours — comportement assumé, jamais un écran blanc.
+
+## 12. Développement sans Nginx (ng serve + runserver)
+
+Deux conséquences à connaître, corrigées en v2.0.1 :
+
+- **Médias privés** : en dev sans Nginx, personne n'honore
+  `X-Accel-Redirect`. Django sert donc le fichier lui-même
+  (`MEDIA_PROTEGE_SERVIR_DIRECT`, actif par défaut quand `DJANGO_DEBUG=True`).
+  En production, la variable reste fausse et Nginx seul sert les fichiers.
+- **Admin Django / CSRF** : `ng serve` (:4200) et `runserver` (:8000) sont deux
+  origines. Les origines de développement sont ajoutées automatiquement à
+  `CSRF_TRUSTED_ORIGINS` quand `DJANGO_DEBUG=True`, et un middleware de
+  développement normalise un `Origin: null` envoyé par certains aperçus
+  embarqués. Rien de tout cela n'est actif en production.

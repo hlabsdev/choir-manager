@@ -1,5 +1,68 @@
 # Notes de version — ChoirManager
 
+## `v2.0.1` — correctifs de recette
+
+Date : 11 novembre 2026
+
+**Statut : correctifs sur la branche `feat/v2-refonte`, non tagués, non
+déployés.** Cette passe corrige les anomalies constatées en test manuel de la
+v2.0.0.
+
+### Médias du répertoire
+
+- **Partition en page blanche / audio muet / téléchargement vide** : en
+  développement sans Nginx (`ng serve` + `runserver`), personne n'honore
+  `X-Accel-Redirect` ; Django renvoyait donc un corps vide. `MEDIA_PROTEGE_
+  SERVIR_DIRECT` (actif seulement quand `DJANGO_DEBUG=True`) sert désormais le
+  fichier depuis Django ; en production, Nginx seul le sert, inchangé.
+- **Consultation de partition** : remplace le `window.open` post-fetch
+  (bloqué par les bloqueurs de pop-ups, d'où l'onglet blanc) par une **modale
+  d'aperçu** avec iframe `blob:` et bouton de téléchargement.
+- **Téléchargement** : garde explicite sur un blob vide (échec visible au lieu
+  d'un fichier de 0 octet) et extension déduite du type serveur si le MIME est
+  absent.
+- **Dépôt par le bureau** : le bureau peut désormais déposer/modifier les
+  médias d'un chant, comme le maître de chœur ; les médias coexistent
+  (partition + audio) au lieu de se remplacer.
+
+### Profil, séances, structure
+
+- **« Mon espace » d'un bureau / maître de chœur** : le serveur refusait
+  `partage_contact` sur sa propre fiche (400 « seule la personne concernée… »).
+  La validation autorise maintenant l'auto-édition ; téléphone vide accepté,
+  photo comprise.
+- **Résumé de séance** : le champ `resume` manquait du sérialiseur de LISTE —
+  il était bien enregistré mais disparaissait au rechargement.
+- **Pupitres** : l'interface lisait `membres_count` alors que l'API expose
+  `nombre_membres` → tous les compteurs affichaient 0.
+- **Filtre « Sans pupitre »** ajouté à la liste des membres.
+- **Organigramme** : présentation en **bandes compactes par famille de postes**
+  (bureau, direction, technique) au lieu d'une longue liste de cartes.
+
+### Export PDF, admin et nommage
+
+- **Export PDF** : commande `manage.py verifier_pdf` (+ `make verif-pdf`) qui
+  diagnostique WeasyPrint et affiche le remède exact (Docker/Linux ou runtime
+  GTK Windows + `WEASYPRINT_DLL_DIR`) ; message 503 enrichi ; procédure
+  reproductible dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) § 11.
+- **Admin Django** : la connexion en développement échouait en 403 CSRF
+  (`Origin checking failed`). Les origines de dev (4200/8000) sont ajoutées à
+  `CSRF_TRUSTED_ORIGINS` et un middleware **de développement seulement**
+  normalise `Origin: null` envoyé par certains aperçus embarqués.
+- **Nommage** : l'interface utilise « **Chœur** » partout (marque d'usage) ;
+  « ChoirManager » reste le nom du produit et du dépôt, expliqué dans le
+  README. Les pieds de page mélangeaient encore les deux.
+
+### Validation
+
+- Backend : `602 tests réussis, 6 ignorés`.
+- Frontend : `196 tests réussis`.
+- Recette navigateur (Chrome headless) : aperçu de partition en modale
+  (`blob:`), photo de profil rechargée, connexion admin Django réussie,
+  compteurs de pupitres corrects, résumé de séance relu après rechargement.
+
+---
+
 ## `v2.0.0` — « Chœur », refonte visuelle et sécurité by design
 
 Date de préparation : 11 novembre 2026

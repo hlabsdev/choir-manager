@@ -42,6 +42,11 @@ il diverge à chaque nouveau tag.
 
 ## Version 2.0 — « Chœur » {#version-2}
 
+> **Nommage** : « **Chœur** » est le nom d'usage de l'interface v2 ;
+> « **ChoirManager** » reste le nom du produit, du dépôt et de la plateforme.
+> L'interface n'affiche plus que « Chœur » ; la v1 indigo/ambre est conservée
+> sur `main` et en production tant que `v2.0.0` n'est pas taguée.
+
 La branche `feat/v2-refonte` prépare une version majeure :
 
 - **refonte visuelle complète** — identité « Papier & scène » (vert pin, corail,

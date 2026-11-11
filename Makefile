@@ -15,7 +15,7 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 
 .DEFAULT_GOAL := aide
 .PHONY: aide hooks verif-sous-modules env config build up up-api up-frontend up-backend dev down logs ps \
-        migrate makemigrations check check-deploy shell dbshell \
+        migrate makemigrations check check-deploy verif-pdf shell dbshell \
         superuser provision seed purge-tokens \
         test test-backend test-frontend collect front-build smoke-medias \
         sauvegarde restauration audit-image nettoyage-jetable \
@@ -98,6 +98,9 @@ check: ## manage.py check
 
 check-deploy: ## Contrôles de sécurité avant préproduction (§11)
 	$(COMPOSE) run --rm backend python manage.py check --deploy
+
+verif-pdf: ## Vérifie la chaîne d'export PDF (WeasyPrint + libs système)
+	$(COMPOSE) exec -T backend python manage.py verifier_pdf
 
 shell: ## Shell Django
 	$(COMPOSE) run --rm backend python manage.py shell
