@@ -498,6 +498,23 @@ de rescanner le QR** — il fait donc partie de la sauvegarde, au même titre qu
 `media_data` (cf. §7). La perte n'est pas une perte de données métier, mais elle
 interrompt le canal jusqu'à réappairage.
 
+#### Interface web WAHA (développement uniquement)
+
+En dev, `compose.dev.yaml` publie WAHA sur `127.0.0.1:${WAHA_HOST_PORT}`.
+L'interface (dashboard/Swagger) est protégée par **HTTP Basic** :
+
+```text
+URL      : http://127.0.0.1:3115/
+Login    : WAHA_DASHBOARD_USERNAME (admin)
+Password : WAHA_DASHBOARD_PASSWORD
+```
+
+Fixer ces deux variables dans `.env` avant le premier démarrage. Si elles sont
+vides, WAHA génère un mot de passe aléatoire **à chaque redémarrage** et
+l'affiche une seule fois dans ses logs (`docker compose logs waha | grep
+WAHA_DASHBOARD_PASSWORD`) — introuvable ensuite. En production, aucun port
+WAHA n'est publié : ces identifiants n'ouvrent rien de public.
+
 #### Pourquoi le port 3000 n'est pas publié en production
 
 `compose.dev.yaml` l'expose sur `127.0.0.1:3000` pour l'initialisation

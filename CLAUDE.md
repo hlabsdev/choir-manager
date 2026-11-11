@@ -820,6 +820,16 @@ couleur, sinon un `text-primary-50` sur panneau sombre devient illisible.
 Choisir le contrôle de formulaire selon la donnée : booléen → switch, petit
 choix exclusif → segmented, liste → select, plage → slider.
 
+⚠️ **`angular.json` force `optimization.styles.inlineCritical=false` en
+production, et ce n'est pas un détail de performance.** L'inlining critique
+d'Angular produit `<link rel="stylesheet" media="print"
+onload="this.media='all'">` : le handler inline est bloqué par la CSP
+`script-src 'self'` du Nginx frontend, la feuille reste `media="print"` et
+**tout l'écran s'affiche sans styles** (constaté en Docker local). Ne pas
+réactiver `inlineCritical` sans ajouter un hash/nonce à la CSP — la
+formulation « aucun script inline n'est produit par le build » dans
+`chm-frontend/nginx.conf` suppose ce réglage.
+
 ## Conventions
 
 - Logique métier dans `services.py`/`signals.py`, jamais dans les vues ou

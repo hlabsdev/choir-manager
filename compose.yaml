@@ -116,6 +116,15 @@ services:
       # Le tableau de bord web n'est pas nécessaire en régime normal : il
       # révèle le QR d'appairage. La session s'initialise une fois, à la main.
       WAHA_DASHBOARD_ENABLED: "false"
+      # Identifiants de l'interface web (dashboard/Swagger) servie à la racine
+      # en développement. Sans eux, WAHA en génère de nouveaux À CHAQUE
+      # REDÉMARRAGE et les affiche dans ses logs — introuvables ensuite.
+      # En production, aucun port WAHA n'est publié : ces valeurs n'ouvrent
+      # rien de public, mais restent à ne pas réutiliser telles quelles.
+      WAHA_DASHBOARD_USERNAME: "${WAHA_DASHBOARD_USERNAME:-admin}"
+      WAHA_DASHBOARD_PASSWORD: "${WAHA_DASHBOARD_PASSWORD:-}"
+      WHATSAPP_SWAGGER_USERNAME: "${WHATSAPP_SWAGGER_USERNAME:-admin}"
+      WHATSAPP_SWAGGER_PASSWORD: "${WHATSAPP_SWAGGER_PASSWORD:-}"
       # Même clé que celle transmise au backend : Django l'envoie en `X-Api-Key`
       # à chaque requête. Vide en développement, obligatoire en production
       # (le résolveur `chm_config/env.py` refuse de démarrer sinon).
