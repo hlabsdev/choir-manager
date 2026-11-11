@@ -85,7 +85,7 @@ travail à venir et les chantiers connus sont centralisés dans
 | Répertoire | Opérationnel | Chants, thèmes, médias (partitions, audio par pupitre/tutti/accompagnement) et suivi des chants travaillés |
 | Finances | Opérationnel | Journal de caisse, catégories, tarifs, campagnes, cotisations et paiements |
 | Communications | Opérationnel | Annonces et pièces jointes |
-| Notifications | Opérationnel | Notifications in-app, compteur de non-lues et emails ciblés best-effort |
+| Notifications | Opérationnel | In-app, compteur de non-lues, emails ciblés et WhatsApp transactionnel (opt-in, via WAHA) — tous best-effort |
 | Rapports | Opérationnel | Finances, présences, effectifs, répertoire, exports CSV et PDF |
 | Dashboard | Opérationnel | Indicateurs et actions adaptés au rôle |
 
@@ -366,9 +366,17 @@ suivantes doivent être explicitement définies hors développement :
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Identifiants SMTP |
 | `EMAIL_USE_TLS` | Activation de TLS |
 | `DEFAULT_FROM_EMAIL` | Adresse d'expédition |
+| `WAHA_ENABLED` | Active le canal WhatsApp (`False` par défaut) |
+| `WAHA_URL` | URL interne de la passerelle WAHA (ex. `http://waha:3000`) |
+| `WAHA_SESSION` | Nom de la session WhatsApp appairée |
+| `WAHA_API_KEY` | Clé d'API WAHA, obligatoire en production quand le canal est actif |
+| `WAHA_MAX_PER_MINUTE` | Plafond d'envois par chorale et par minute (défaut 20) |
 
 En développement, les emails sont écrits dans la console. Les notifications
-email sont best-effort : un échec d'envoi ne doit pas annuler l'action métier.
+email et WhatsApp sont best-effort : un échec d'envoi ne doit pas annuler
+l'action métier. Le canal WhatsApp exige un consentement explicite du membre
+(Mon espace → Notifications WhatsApp) et un numéro dédié, appairé une fois via
+`make waha-init` (cf. [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md)).
 
 Le frontend déduit actuellement l'hôte de l'API depuis
 `window.location.hostname` et utilise `http://<hôte>:8000/api`. Cette
@@ -397,7 +405,7 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient ~427 tests couvrant notamment l'authentification, l'isolation
+La suite contient ~631 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
 présences, la musique (dont les médias du répertoire), les finances, les
 annonces, les notifications, les rapports et la suspension d'une chorale.

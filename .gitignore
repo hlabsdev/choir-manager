@@ -29,6 +29,10 @@ backups/
 .docker/
 volumes/
 
+# QR d'appairage WAHA récupéré par `make waha-init` — éphémère, et surtout
+# secret le temps de sa validité : il permet de lier un WhatsApp.
+waha-qr.png
+
 # Imports opérationnels contenant des données personnelles réelles.
 # ⚠️ Cette règle n'a AUCUN effet rétroactif : un fichier déjà suivi reste suivi
 # (c'est le cas de docs/membres_hdgab.csv, cf. docs/AUDIT_SECURITE_V2.md).

@@ -16,7 +16,7 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 .DEFAULT_GOAL := aide
 .PHONY: aide hooks verif-sous-modules env config build up up-api up-frontend up-backend dev down logs ps \
         migrate makemigrations check check-deploy verif-pdf shell dbshell \
-        superuser provision seed purge-tokens \
+        superuser provision seed purge-tokens waha-init prod-waha-init \
         test test-backend test-frontend collect front-build smoke-medias \
         sauvegarde restauration audit-image nettoyage-jetable \
         prod-deploie prod-sauvegarde-pre-deploiement _prod-verifie-progression \
@@ -120,6 +120,15 @@ seed: ## 2e chorale de démo — dev/QA UNIQUEMENT, jamais en production
 purge-tokens: ## Purge les refresh tokens expirés (à planifier quotidiennement, cf. §5)
 	$(COMPOSE) exec -T backend python manage.py flushexpiredtokens
 	@echo "→ Tokens expirés purgés."
+
+waha-init: ## Initialise la session WhatsApp WAHA et récupère le QR d'appairage
+	@# Passe par le backend (réseau Compose) : en production le port 3000 de
+	@# WAHA n'est PAS publié, volontairement — son tableau de bord peut lier un
+	@# compte WhatsApp.
+	@$(COMPOSE) exec -T backend python manage.py waha_init
+	@docker cp choirmanager-backend:/app/waha-qr.png ./waha-qr.png 2>/dev/null \
+	  && echo "→ QR copié sur l'hôte : ./waha-qr.png" \
+	  || echo "→ Aucun QR à copier (session peut-être déjà WORKING)."
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -386,6 +395,12 @@ prod-build: ## PROD — reconstruit les images
 
 prod-migrate: ## PROD — applique les migrations (service one-shot)
 	$(COMPOSE_PROD) run --rm migrate
+
+prod-waha-init: ## PROD — initialise la session WhatsApp WAHA et récupère le QR
+	@$(COMPOSE_PROD) exec -T backend python manage.py waha_init
+	@docker cp choirmanager-backend:/app/waha-qr.png ./waha-qr.png 2>/dev/null \
+	  && echo "→ QR copié sur l'hôte : ./waha-qr.png" \
+	  || echo "→ Aucun QR à copier (session peut-être déjà WORKING)."
 
 prod-logs: ## PROD — suit les logs
 	$(COMPOSE_PROD) logs -f --tail=100

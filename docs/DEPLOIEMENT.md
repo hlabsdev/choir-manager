@@ -116,6 +116,9 @@ peut résulter de l'oubli d'une variable.**
 | `DATABASE_URL` | repli SQLite explicite | **démarrage refusé** |
 | `REDIS_URL` | repli LocMem explicite | **démarrage refusé** |
 | `DJANGO_COOKIE_SECURE` | sans objet | `True` |
+| `WAHA_ENABLED` | `False` | `True` via `compose.prod.yaml` (surchargeable par `.env`) |
+| `WAHA_URL` | `http://waha:3000` (Compose) | **démarrage refusé si le canal est actif et l'URL vide** |
+| `WAHA_API_KEY` | vide toléré | **démarrage refusé si le canal est actif et la clé vide** |
 
 Deux refus supplémentaires, volontairement bruyants :
 
@@ -129,6 +132,33 @@ Deux refus supplémentaires, volontairement bruyants :
   façon pas nécessaire.
 
 Un démarrage qui échoue affiche le nom exact de la variable manquante.
+
+**WhatsApp (WAHA)** est **désactivé par défaut hors Compose** et activé par
+défaut par `compose.prod.yaml` (`WAHA_ENABLED=True`) : la production doit donc
+posséder une clé. En développement, il reste coupé pour ne pas logger un échec
+par notification. Poser une clé aléatoire — la MÊME valeur est lue par WAHA et
+par Django :
+
+```bash
+# 1. Générer une clé
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# 2. Dans .env (jamais committé)
+WAHA_API_KEY=<valeur-générée>
+
+# 3. Production uniquement : ne PAS laisser WAHA_ENABLED=False dans .env,
+#    sinon l'interrupteur explicite désactive le canal. En développement,
+#    laisser False.
+WAHA_ENABLED=True
+```
+
+Sans clé, un démarrage de production avec `WAHA_ENABLED=True` est **refusé**
+avec le nom de la variable — jamais un service qui tourne sans pouvoir envoyer.
+Pour déployer sans WhatsApp, poser explicitement `WAHA_ENABLED=False`.
+
+Tant que `WAHA_ENABLED=False`, le conteneur WAHA tourne mais aucun message ne
+part : les appels à `notifier(..., par_whatsapp=True)` sont ignorés avec une
+ligne de log, sans ligne `NotificationWhatsApp`.
 
 ### ⛔ ÉTAPE BLOQUANTE — mesurer `DJANGO_NUM_PROXIES` sur l'hôte réel
 
@@ -428,6 +458,71 @@ chorale. » réellement affichée.
 Si `SPF : PASS` mais `DKIM : NEUTRAL` ou absent : la clé DKIM n'est pas publiée
 ou pas encore propagée. Les messages partent, mais leur réputation est
 mauvaise — à corriger avant d'ouvrir le pilote à de vrais membres.
+
+### WhatsApp — initialiser la session WAHA (une seule fois)
+
+Le canal WhatsApp est **sortant** et réservé aux notifications transactionnelles
+attendues (rappel de répétition, confirmation, alerte de cotisation). Il n'est
+jamais utilisé pour une annonce générale : WAHA s'appuie sur le protocole
+WhatsApp Web, non officiel, et un usage trop agressif peut faire **bannir le
+numéro**.
+
+**Numéro dédié obligatoire.** Utiliser un numéro professionnel, prépayé, dont
+le nom de profil dit clairement « Chœur — notification automatique ». Jamais un
+numéro personnel d'un membre du bureau : un bannissement emporterait son
+WhatsApp personnel.
+
+#### Procédure (pile démarrée)
+
+```bash
+# Poste de développement (pile compose.yaml + compose.dev.yaml) :
+make waha-init
+
+# Serveur de production (toujours la pile compose.prod.yaml) :
+make prod-waha-init
+
+# → interroge le backend, qui parle à http://waha:3000 sur le réseau interne
+# → crée/démarre la session « chm-notifications »
+# → si le statut est SCAN_QR_CODE, enregistre /app/waha-qr.png et le copie
+#   dans ./waha-qr.png sur l'hôte
+```
+
+1. Ouvrir `waha-qr.png` et le scanner avec le téléphone dédié : WhatsApp →
+   **Appareils connectés** → **Connecter un appareil**.
+2. Relancer `make waha-init` : le statut doit passer à **`WORKING`**.
+3. Envoyer un message de test à un membre qui a donné son consentement
+   (Mon espace → Notifications WhatsApp).
+
+La session persiste dans le volume `waha_sessions`. **Perdre ce volume impose
+de rescanner le QR** — il fait donc partie de la sauvegarde, au même titre que
+`media_data` (cf. §7). La perte n'est pas une perte de données métier, mais elle
+interrompt le canal jusqu'à réappairage.
+
+#### Pourquoi le port 3000 n'est pas publié en production
+
+`compose.dev.yaml` l'expose sur `127.0.0.1:3000` pour l'initialisation
+locale. `compose.prod.yaml` ne le publie pas : seul `mrs-gateway` est public.
+Exposer WAHA donnerait accès à son tableau de bord, qui affiche le QR de
+session — un tiers pourrait y lier **son** WhatsApp à la place du numéro de la
+plateforme. `make waha-init` passe par le backend, sur le réseau interne, et ne
+nécessite donc aucune ouverture de port.
+
+#### Vérifier après déploiement
+
+```bash
+# Statut de la session, sans exposer WAHA :
+make prod-waha-init
+
+# Les derniers envois et leurs échecs :
+docker compose -f compose.yaml -f compose.prod.yaml exec backend python manage.py shell -c "
+from notifications.models import NotificationWhatsApp as N
+print(list(N.objects.values('statut', 'gabarit', 'created_at')[:10]))"
+```
+
+Un `echec` avec `erreur="throttle"` signifie que `WAHA_MAX_PER_MINUTE` a été
+atteint pour cette chorale ; avec `erreur="HTTP 401"`, la clé
+`WAHA_API_KEY` diffère entre Django et WAHA (les deux la lisent dans `.env`,
+mais une modification n'est prise qu'après redémarrage des deux conteneurs).
 
 ### Purge des refresh tokens — À PLANIFIER
 

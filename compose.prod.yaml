@@ -30,6 +30,14 @@ services:
       DJANGO_DEBUG: "False"
       DJANGO_COOKIE_SECURE: "True"
       DJANGO_ACCEPT_INSECURE_COOKIES: "False"
+      # WhatsApp : ACTIVÉ par défaut en production, comme le veut la
+      # spécification du canal. ⚠️ Cela rend WAHA_API_KEY OBLIGATOIRE dans le
+      # `.env` du serveur : le résolveur refuse de démarrer un canal actif sans
+      # clé (et sans URL), plutôt que de laisser un service silencieusement
+      # inopérant. Pour déployer sans WhatsApp, poser explicitement
+      # WAHA_ENABLED=False — l'interrupteur reste prioritaire.
+      WAHA_ENABLED: "${WAHA_ENABLED:-True}"
+      WAHA_URL: "${WAHA_URL:-http://waha:3000}"
     security_opt:
       - no-new-privileges:true
     volumes:

@@ -22,6 +22,14 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
+  waha:
+    # Nécessaire pour initialiser la session depuis l'hôte (ouvrir le QR dans
+    # un navigateur, ou `curl` le statut). Lié à 127.0.0.1 UNIQUEMENT : la
+    # passerelle n'a aucune raison d'être joignable depuis le réseau local, et
+    # son tableau de bord peut lier un compte WhatsApp.
+    ports:
+      - "127.0.0.1:3000:3000"
+
   backend:
     environment:
       # Traces Django lisibles pendant le développement. La configuration reste

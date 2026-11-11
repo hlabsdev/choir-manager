@@ -44,7 +44,10 @@ liste des répétitions exposant `resume`, auto-édition `partage_contact` pour
 un membre du staff, compteurs de pupitres (`nombre_membres`), filtre « Sans
 pupitre », organigramme en bandes, diagnostic PDF `manage.py verifier_pdf`,
 origines CSRF de développement + normalisation `Origin: null` (DEBUG
-uniquement), et nommage « Chœur » harmonisé.
+uniquement), nommage « Chœur » harmonisé, et **canal WhatsApp transactionnel
+via WAHA** (opt-in par membre, service idempotent, throttle par tenant,
+service Compose + `make waha-init`). Validation de la branche : **631 tests
+backend** (6 ignorés) et **199 tests frontend**, build de production vert.
 
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
@@ -608,16 +611,17 @@ calculés à la volée, aucune image ni dépendance npm) sur les 3 écrans qui
 `shared/data/pays-indicatifs.ts` (242 entrées) généré depuis les MÊMES
 bibliothèques que le backend (`phonenumbers` + `django_countries`), jamais
 transcrit à la main — un référentiel qui diverge entre front et back donnerait
-un indicatif accepté d'un côté et rejeté de l'autre, silencieusement. `profil.
-component.ts` n'expose aujourd'hui aucune édition de téléphone — rien à y
-brancher tant que cet écran n'en a pas besoin.
+un indicatif accepté d'un côté et rejeté de l'autre, silencieusement.
+`profil.component.ts` expose l'auto-édition du téléphone (via
+`MembrePersonnelSerializer`) et le consentement WhatsApp par son endpoint
+dédié — les deux surfaces restent distinctes, cf. section WhatsApp.
 
 ### Notifications — point d'entrée unique
 
 `notifications/services.py` (`notifier`, `notifier_groupe`,
 `envoyer_email_externe`) est le SEUL point d'entrée pour créer une notification
-in-app ou envoyer un email — jamais `Notification.objects.create` directement
-dans une vue. Emails best-effort : n'utilisent plus `fail_silently=True`
+in-app, envoyer un email ou un WhatsApp — jamais `Notification.objects.create`
+directement dans une vue. Emails best-effort : n'utilisent plus `fail_silently=True`
 (qui avalait les échecs sans trace) mais un `try/except` qui journalise —
 même promesse tenue autrement : ne jamais faire échouer l'action métier qui
 les déclenche.
@@ -676,6 +680,46 @@ aucun moyen d'agir pour qui le recevait.
 `EMAIL_REPLY_TO_PLATEFORME` avec un bouton direct vers la fiche à traiter.
 Sans elles, une `DemandeChorale` ou une `Suggestion` ne se découvrait qu'en
 visitant l'admin — invisible potentiellement plus d'un jour.
+
+### Canal WhatsApp (WAHA) — opt-in, transactionnel uniquement
+
+Le canal WhatsApp est un **canal de `notifier()`** (`par_whatsapp=True`), jamais
+un second point d'entrée : `notifications/whatsapp.py::envoyer_whatsapp()` est
+le seul code qui parle à WAHA, comme `_envoyer_email` est le seul qui parle
+SMTP. Il ne part que si `Membre.whatsapp_optin=True` **et** que le numéro est
+renseigné ; le service revérifie ces deux conditions à chaque envoi, le front
+n'est jamais la barrière.
+
+**Modèle et consentement.** `notifications.NotificationWhatsApp` (hérite de
+`TimeStampedModel`) trace chaque envoi réellement tenté : numéro figé E164,
+gabarit, `idempotency_key` unique, statut (`en_attente`/`envoye`/`echec`),
+`waha_message_id`, erreur et horodatage. Une clé déjà `envoye` ne rappelle pas
+WAHA ; une clé `echec` peut être retentée. Le consentement vit sur
+`Membre.whatsapp_optin`/`whatsapp_optin_le` (timestamp remis à null au retrait),
+**par tenant** — un compte membre de deux chorales consent séparément. Endpoint
+dédié `POST /api/auth/profile/whatsapp-optin/` (`WhatsAppOptInView`) : pas de
+PATCH groupé, pas d'id dans l'URL (le serveur prend le membre du tenant actif).
+
+**Garde-fous.** `WAHA_ENABLED` est **faux par défaut** ; le résolveur
+`chm_config/env.py::resoudre_waha` refuse le démarrage si le canal est actif
+sans URL, et hors DEBUG sans `WAHA_API_KEY` (sinon le dashboard WAHA est ouvert
+et peut lier un autre WhatsApp). Throttle par tenant `WAHA_MAX_PER_MINUTE`
+(défaut 20) via `cache.add`/`incr` — le même cache Redis que les throttles DRF,
+jamais un compteur par worker. Timeout HTTP 10 s, texte brut uniquement (jamais
+de HTML), liens en clair.
+
+**Périmètre volontairement limité.** `notifier_groupe()` n'expose PAS WhatsApp :
+une annonce générale est exactement ce qui fait bannir un numéro WAHA, et une
+boucle synchrone dans une requête HTTP bloquerait le worker. Le Mode B (file
+Redis + `worker_whatsapp`) n'est pas implémenté ; s'il devient nécessaire, il
+passera par une file dédiée, jamais par `notifier_groupe()` tel quel.
+
+**Déploiement.** Service `waha` dans `compose.yaml` (aucun port publié, volume
+`waha_sessions` obligatoire, `WAHA_DASHBOARD_ENABLED=false`), variables
+transmises par la pile de base. `make waha-init` crée/démarre la session et
+récupère le QR (`manage.py waha_init`, passe par le backend sur le réseau
+interne). Procédure complète — numéro dédié, scan, vérification `WORKING`,
+sauvegarde du volume — dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
 ### Boîte à suggestions
 
@@ -895,6 +939,7 @@ pas ailleurs.
 | 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. **v2.0.0 ajoute l'audit `pip-audit`/`npm audit` en CI**, mais ne verrouille pas encore les versions (l'audit frontend relève 52 avis, dont 3 critiques dans la chaîne de build — correctifs à planifier). |
 | ~~11~~ | ~~**Import Excel — frontend et livraison**~~ | **Livré dans v1.7.0** — écran Bureau avec gabarit, aperçu, confirmation revalidée et restitution ponctuelle des mots de passe temporaires. |
 | 12 | **Self-service du profil — publication** | Publié sur `main` et préparé pour `v1.8.0` : nom, prénom, téléphone, photo et partage de contact. Tag et déploiement restent à effectuer ; la production reste sur `v1.7.0`. |
+| ~~13~~ | ~~**Canal WhatsApp (WAHA)**~~ | **Livré sur `feat/v2-refonte`, non déployé** — `NotificationWhatsApp`, opt-in `Membre.whatsapp_optin` (endpoint dédié), `envoyer_whatsapp()` idempotent et throttlé, intégration `notifier(..., par_whatsapp=True)`, admin en lecture seule, service Compose WAHA + `make waha-init`, procédure dans `docs/DEPLOIEMENT.md`. Limite assumée : pas de file Redis/worker (Mode B), `notifier_groupe()` reste in-app. |
 
 Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
 partitions hors ligne, calendrier externe, notifications push/SMS, module
