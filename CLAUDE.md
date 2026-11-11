@@ -46,8 +46,9 @@ pupitre », organigramme en bandes, diagnostic PDF `manage.py verifier_pdf`,
 origines CSRF de développement + normalisation `Origin: null` (DEBUG
 uniquement), nommage « Chœur » harmonisé, et **canal WhatsApp transactionnel
 via WAHA** (opt-in par membre, service idempotent, throttle par tenant,
-service Compose + `make waha-init`). Validation de la branche : **631 tests
-backend** (6 ignorés) et **199 tests frontend**, build de production vert.
+service Compose + `make waha-init`). Validation de la branche : **632 tests
+backend** (6 ignorés sous SQLite, **638 sous PostgreSQL**) et **199 tests
+frontend**, build de production vert.
 
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
@@ -707,6 +708,11 @@ et peut lier un autre WhatsApp). Throttle par tenant `WAHA_MAX_PER_MINUTE`
 (défaut 20) via `cache.add`/`incr` — le même cache Redis que les throttles DRF,
 jamais un compteur par worker. Timeout HTTP 10 s, texte brut uniquement (jamais
 de HTML), liens en clair.
+
+**Premier appelant réel.** `presences/views.py::_notifier_traitement` (demande
+d'absence approuvée ou refusée) passe `par_whatsapp=True` : c'est le cas
+transactionnel attendu, et cela rend le canal testable depuis un geste métier.
+Le reste des appels n'est pas converti — chaque ajout est une décision produit.
 
 **Périmètre volontairement limité.** `notifier_groupe()` n'expose PAS WhatsApp :
 une annonce générale est exactement ce qui fait bannir un numéro WAHA, et une

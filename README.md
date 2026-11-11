@@ -405,7 +405,7 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient ~631 tests couvrant notamment l'authentification, l'isolation
+La suite contient ~638 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
 présences, la musique (dont les médias du répertoire), les finances, les
 annonces, les notifications, les rapports et la suspension d'une chorale.
