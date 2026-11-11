@@ -143,3 +143,21 @@ Tailwind utilitaires), pas de bibliothèque UI supplémentaire, pas de
 dégradés violets, pas d'emojis, pas de spinner plein écran, pas de
 `!important` en série, pas de renommage de classes déjà utilisées par les
 tests sans vérifier les specs.
+
+## 8. Extension « Planning & assiduité » (branche étape 2)
+
+Deux écrans ajoutés sans second système de design : mêmes polices, même
+palette, mêmes composants de coquille. Le calendrier réutilise la grille
+papier et les couleurs de nature (vert = répétition, corail = concert, bleu =
+réunion, ocre = audition). L'analytique emploie les mêmes cartes et badges,
+avec des barres de taux et une série de pointages — pas de bibliothèque de
+graphiques.
+
+![Planning](captures/planning-v2.png)
+
+![Assiduité](captures/assiduite-v2.png)
+
+Principes tenus : navigation identique (Planning dans « Vie de la chorale »,
+Assiduité dans « Administration » pour bureau/MDC), aucune route ni
+`data-testid` renommés, états chargement/vide/erreur explicites, et actions
+RSVP accessibles au clavier dans une modale.
