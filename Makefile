@@ -22,7 +22,8 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
         prod-deploie prod-sauvegarde-pre-deploiement _prod-verifie-progression \
         _prod-check-deploy prod-retour-arriere prod-restauration \
         prod-up prod-down prod-build prod-migrate prod-logs prod-ps \
-        prod-shell prod-smoke prod-sauvegarde prod-verif-sauvegarde prod-restauration-test
+        prod-shell prod-smoke prod-sauvegarde prod-verif-sauvegarde prod-restauration-test \
+        prod-rappels
 
 # ---------------------------------------------------------------------------
 # Aide
@@ -395,6 +396,9 @@ prod-build: ## PROD — reconstruit les images
 
 prod-migrate: ## PROD — applique les migrations (service one-shot)
 	$(COMPOSE_PROD) run --rm migrate
+
+prod-rappels: ## PROD — envoie les rappels des événements à venir (à planifier)
+	$(COMPOSE_PROD) exec -T backend python manage.py rappeler_evenements --jours 1
 
 prod-waha-init: ## PROD — initialise la session WhatsApp WAHA et récupère le QR
 	@$(COMPOSE_PROD) exec -T backend python manage.py waha_init

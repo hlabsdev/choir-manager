@@ -577,6 +577,29 @@ Trois causes réelles, dans l'ordre de probabilité :
 Après un scan réussi, `waha_init` doit afficher `WORKING`, et
 `NotificationWhatsApp.statut` doit passer à `envoye`.
 
+### Rappels d'événements — À PLANIFIER
+
+Le module Planning envoie un rappel in-app + email aux membres actifs des
+événements qui commencent dans les prochaines 24 h. La commande est idempotente
+par jour : la rejouer ne duplique rien.
+
+```bash
+make prod-rappels
+# équivalent : docker compose -f compose.yaml -f compose.prod.yaml exec -T \
+#   backend python manage.py rappeler_evenements --jours 1
+```
+
+Fréquence recommandée : **une fois par jour**, en fin de matinée (pour que le
+rappel de demain arrive avant la fin de journée). Entrée cron type :
+
+```cron
+0 11 * * * cd /srv/chm/choir-manager && make prod-rappels >> /var/log/chm-rappels.log 2>&1
+```
+
+Le canal WhatsApp n'est **pas** utilisé pour ces rappels : ils partent à toute
+la chorale, donc c'est un envoi de masse. Le canal WhatsApp reste réservé aux
+notifications transactionnelles unitaires.
+
 ### Purge des refresh tokens — À PLANIFIER
 
 Depuis l'activation de `rest_framework_simplejwt.token_blacklist`, **chaque
