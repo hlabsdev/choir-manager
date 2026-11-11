@@ -724,8 +724,16 @@ passera par une file dédiée, jamais par `notifier_groupe()` tel quel.
 `waha_sessions` obligatoire, `WAHA_DASHBOARD_ENABLED=false`), variables
 transmises par la pile de base. `make waha-init` crée/démarre la session et
 récupère le QR (`manage.py waha_init`, passe par le backend sur le réseau
-interne). Procédure complète — numéro dédié, scan, vérification `WORKING`,
-sauvegarde du volume — dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+interne). En dev uniquement, `compose.dev.yaml` publie le port sur
+`127.0.0.1` et active le dashboard pour scanner un **QR en direct** :
+`http://127.0.0.1:3115/dashboard/` (Basic Auth `WAHA_DASHBOARD_*`).
+
+⚠️ Si WhatsApp déconnecte la session juste après le scan (`LOGOUT` dans les
+logs, « impossible de se connecter » côté téléphone), le moteur WEBJS est le
+premier suspect : passer `WHATSAPP_DEFAULT_ENGINE=NOWEB` et repartir d'un
+volume de session vide. Procédure complète — numéro dédié, scan, vérification
+`WORKING`, sauvegarde du volume, remèdes — dans
+[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
 ### Boîte à suggestions
 

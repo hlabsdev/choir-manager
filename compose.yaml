@@ -116,6 +116,12 @@ services:
       # Le tableau de bord web n'est pas nécessaire en régime normal : il
       # révèle le QR d'appairage. La session s'initialise une fois, à la main.
       WAHA_DASHBOARD_ENABLED: "false"
+      # Moteur WhatsApp. WEBJS pilote un Chromium ; NOWEB/GOWS parlent le
+      # protocole WhatsApp Web sans navigateur. Le WEBJS de `latest` peut être
+      # déconnecté par WhatsApp juste après le scan (observé : session
+      # `LOGOUT` deux secondes après le appairage). NOWEB est le repli à
+      # essayer en premier ; le changer ne touche pas l'API HTTP Django.
+      WHATSAPP_DEFAULT_ENGINE: "${WHATSAPP_DEFAULT_ENGINE:-WEBJS}"
       # Identifiants de l'interface web (dashboard/Swagger) servie à la racine
       # en développement. Sans eux, WAHA en génère de nouveaux À CHAQUE
       # REDÉMARRAGE et les affiche dans ses logs — introuvables ensuite.

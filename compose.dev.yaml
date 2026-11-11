@@ -34,6 +34,12 @@ services:
     # Le port INTERNE reste 3000 — c'est celui que Django appelle.
     ports:
       - "127.0.0.1:${WAHA_HOST_PORT:-3000}:3000"
+    environment:
+      # Dashboard activé UNIQUEMENT en dev : il affiche le QR en direct et
+      # permet de voir l'état de la session sans relancer `waha-init` à
+      # chaque expiration. Protégé par le Basic Auth WAHA_DASHBOARD_* et
+      # jamais publié hors de 127.0.0.1. La pile de base le garde fermé.
+      WAHA_DASHBOARD_ENABLED: "true"
 
   backend:
     environment:

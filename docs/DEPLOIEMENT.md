@@ -500,14 +500,19 @@ interrompt le canal jusqu'à réappairage.
 
 #### Interface web WAHA (développement uniquement)
 
-En dev, `compose.dev.yaml` publie WAHA sur `127.0.0.1:${WAHA_HOST_PORT}`.
-L'interface (dashboard/Swagger) est protégée par **HTTP Basic** :
+En dev, `compose.dev.yaml` publie WAHA sur `127.0.0.1:${WAHA_HOST_PORT}` et
+active le dashboard. Il est protégé par **HTTP Basic** :
 
 ```text
-URL      : http://127.0.0.1:3115/
+URL      : http://127.0.0.1:3115/dashboard/
 Login    : WAHA_DASHBOARD_USERNAME (admin)
 Password : WAHA_DASHBOARD_PASSWORD
 ```
+
+Le dashboard affiche le **QR en direct** et l'état de la session : c'est le
+chemin à privilégier pour scanner, car le PNG écrit par `waha_init` expire vite.
+L'API reste sur `/api/...` avec `X-Api-Key` ; le Basic Auth ne couvre que
+l'interface.
 
 Fixer ces deux variables dans `.env` avant le premier démarrage. Si elles sont
 vides, WAHA génère un mot de passe aléatoire **à chaque redémarrage** et
@@ -540,6 +545,37 @@ Un `echec` avec `erreur="throttle"` signifie que `WAHA_MAX_PER_MINUTE` a été
 atteint pour cette chorale ; avec `erreur="HTTP 401"`, la clé
 `WAHA_API_KEY` diffère entre Django et WAHA (les deux la lisent dans `.env`,
 mais une modification n'est prise qu'après redémarrage des deux conteneurs).
+
+#### Si WhatsApp refuse l'appairage (`FAILED`, « impossible de se connecter »)
+
+Trois causes réelles, dans l'ordre de probabilité :
+
+1. **QR périmé.** Le PNG de `waha_init` est une photo à l'instant T ; WAHA le
+   régénère toutes les quelques secondes. Scanner depuis le **dashboard**
+   (`/dashboard/`), qui affiche la version courante, élimine ce cas.
+2. **Session fantôme / moteur WEBJS rejeté.** Si les logs montrent
+   `Session has been logged out! args=LOGOUT` juste après le scan, WhatsApp a
+   refusé la liaison. Le moteur WEBJS (Chromium) est le plus exposé. Passer à
+   NOWEB puis repartir d'une session vide :
+
+   ```bash
+   # dans .env
+   WHATSAPP_DEFAULT_ENGINE=NOWEB
+
+   docker compose -f compose.yaml -f compose.dev.yaml stop waha
+   docker compose -f compose.yaml -f compose.dev.yaml rm -f waha
+   docker volume rm choirmanager_waha_sessions
+   docker compose -f compose.yaml -f compose.dev.yaml up -d waha
+   ```
+
+3. **Appareils liés saturés ou conflit de compte.** Sur le téléphone :
+   WhatsApp → Appareils connectés → retirer les anciennes sessions
+   (WAHA/Chrome), puis rescanner. Utiliser UN seul téléphone et UN seul compte
+   pour le test ; scanner ensuite avec WhatsApp Business lie un autre compte et
+   peut déconnecter le premier.
+
+Après un scan réussi, `waha_init` doit afficher `WORKING`, et
+`NotificationWhatsApp.statut` doit passer à `envoye`.
 
 ### Purge des refresh tokens — À PLANIFIER
 
