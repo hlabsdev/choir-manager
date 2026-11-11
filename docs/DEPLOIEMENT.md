@@ -1005,3 +1005,18 @@ local). Sans intérêt en production, où aucun port WAHA n'est publié.
 même que le backend ne soit lancé. Poser une clé quelconque dans `.env` — elle
 est partagée par WAHA et Django — ou passer `DJANGO_DEBUG=True` dans `.env`
 pour ce poste.
+
+**4. Upload de pièce jointe → 500 `PermissionError: /app/media/annonces`.**
+Un volume `media_data` créé par une ancienne exécution peut appartenir à
+`root`, alors que le backend tourne sous l'utilisateur `chm` (uid 10001). Le
+téléversement d'une photo ou d'une pièce jointe échoue alors en 500, sans
+rapport avec le formulaire. Corriger le volume existant :
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml exec -T -u root \
+  backend chown -R chm:chm /app/media
+```
+
+Un volume recréé depuis l'image actuelle hérite déjà de `chm:chm` ; cette
+correction ne concerne que les volumes antérieurs. En production, c'est le
+propriétaire de `/srv/chm/media` sur l'hôte qui doit être aligné (cf. §7).
