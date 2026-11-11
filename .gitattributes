@@ -2,3 +2,7 @@
 *.svg text eol=lf
 *.md text eol=lf
 *.mjs text eol=lf
+# Scripts exécutés DANS les conteneurs : un checkout Windows en CRLF produit
+# « exec …/entrypoint.sh: no such file or directory » (le shebang devient
+# `/bin/sh\r`). Défaut observé en déployant la pile locale.
+*.sh text eol=lf

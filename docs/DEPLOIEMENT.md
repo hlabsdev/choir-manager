@@ -923,3 +923,32 @@ Deux conséquences à connaître, corrigées en v2.0.1 :
   `CSRF_TRUSTED_ORIGINS` quand `DJANGO_DEBUG=True`, et un middleware de
   développement normalise un `Origin: null` envoyé par certains aperçus
   embarqués. Rien de tout cela n'est actif en production.
+
+## 13. Docker local sous Windows — trois pièges vérifiés
+
+Ces trois points ont réellement bloqué un premier `up` sur un poste Windows ;
+ils ne concernent pas la production, mais coûtent du temps à diagnostiquer.
+
+**1. Scripts `*.sh` en CRLF.** Un checkout Windows peut convertir
+`chm-backend/docker/entrypoint.sh` en CRLF. Le shebang devient `/bin/sh\r`,
+et le conteneur répond `exec /app/docker/entrypoint.sh: no such file or
+directory` alors que le fichier existe. `.gitattributes` force désormais
+`*.sh text eol=lf` ; sur un clone antérieur au correctif :
+`git add --renormalize .` (ou reconvertir le fichier) puis reconstruire
+`backend`.
+
+**2. Port hôte 3000 réservé par Windows.** Hyper-V/WinNAT réserve des plages
+entières (observé : 2915-3014), et Docker échoue avec
+`listen tcp4 127.0.0.1:3000: bind: An attempt was made to access a socket in a
+way forbidden by its access permissions`. Le port INTERNE de WAHA reste 3000 ;
+seul le port HÔTE change, via `WAHA_HOST_PORT` dans `.env` (3115 dans l'exemple
+local). Sans intérêt en production, où aucun port WAHA n'est publié.
+
+**3. `WAHA_API_KEY` obligatoire même en développement Docker.** Le service
+`migrate` lit `DJANGO_DEBUG` depuis `.env` (`False` par défaut), alors que
+`compose.dev.yaml` ne passe `True` qu'au service `backend`. Avec
+`WAHA_ENABLED=True` et une clé vide, `migrate` refuse donc de démarrer
+(`WAHA_ENABLED=true exige WAHA_API_KEY lorsque DJANGO_DEBUG=False`), avant
+même que le backend ne soit lancé. Poser une clé quelconque dans `.env` — elle
+est partagée par WAHA et Django — ou passer `DJANGO_DEBUG=True` dans `.env`
+pour ce poste.
