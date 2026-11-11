@@ -44,7 +44,11 @@ v2.0.0.
 - **Export PDF** : commande `manage.py verifier_pdf` (+ `make verif-pdf`) qui
   diagnostique WeasyPrint et affiche le remède exact (Docker/Linux ou runtime
   GTK Windows + `WEASYPRINT_DLL_DIR`) ; message 503 enrichi ; procédure
-  reproductible dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) § 11.
+  reproductible dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) § 11. Le
+  chemin standard `C:\Program Files\GTK3-Runtime Win64\bin` est **détecté
+  automatiquement** côté Django : installer GTK suffit sur un poste Windows
+  standard. Vérifié sur ce poste : les 4 rapports sortent en
+  `application/pdf` (11–14 Ko, en-tête `%PDF`).
 - **Admin Django** : la connexion en développement échouait en 403 CSRF
   (`Origin checking failed`). Les origines de dev (4200/8000) sont ajoutées à
   `CSRF_TRUSTED_ORIGINS` et un middleware **de développement seulement**

@@ -135,6 +135,7 @@ python manage.py makemigrations
 python manage.py migrate
 pytest -q                           # suite complète (~549 tests)
 python manage.py check
+python manage.py verifier_pdf       # diagnostic export PDF (WeasyPrint + GTK/Pango)
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
 python manage.py seed_demo_chorale  # 2e chorale de démo — dev/QA uniquement

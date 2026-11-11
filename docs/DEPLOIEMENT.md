@@ -803,15 +803,17 @@ est affiché (paquets Linux, runtime GTK Windows, variable `WEASYPRINT_DLL_DIR`)
 `fonts-dejavu-core`. Reconstruire l'image (`make build`) suffit.
 
 **Poste Windows (dev hors Docker)** : installer le runtime GTK 3
-(https://github.com/tschoonj/GTK-for-Windows-Runtime-Installer), puis exporter
-`WEASYPRINT_DLL_DIR` vers son dossier `bin` avant `runserver` :
+(https://github.com/tschoonj/GTK-for-Windows-Runtime-Installer). **Le chemin
+standard `C:\Program Files\GTK3-Runtime Win64\bin` est détecté
+automatiquement** par `chm_config/settings.py` — aucune variable à exporter si
+l'installation est aux emplacements par défaut. Pour un chemin personnalisé,
+exporter `WEASYPRINT_DLL_DIR` vers son dossier `bin` avant `runserver` :
 
 ```powershell
-$env:WEASYPRINT_DLL_DIR = "C:\Program Files\GTK3-Runtime Win64\bin"
+$env:WEASYPRINT_DLL_DIR = "D:\GTK3\bin"
 ```
 
-Sans cela, l'écran Rapports affiche le message d'indisponibilité et le CSV
-reste la voie de secours — comportement assumé, jamais un écran blanc.
+Vérification immédiate après installation :
 
 ## 12. Développement sans Nginx (ng serve + runserver)
 
