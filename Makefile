@@ -15,8 +15,8 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
 
 .DEFAULT_GOAL := aide
 .PHONY: aide hooks verif-sous-modules env config build up up-api up-frontend up-backend dev down logs ps \
-        migrate makemigrations check check-deploy shell dbshell \
-        superuser provision seed purge-tokens \
+        migrate makemigrations check check-deploy verif-pdf shell dbshell \
+        superuser provision seed purge-tokens waha-init prod-waha-init \
         test test-backend test-frontend collect front-build smoke-medias \
         sauvegarde restauration audit-image nettoyage-jetable \
         prod-deploie prod-sauvegarde-pre-deploiement _prod-verifie-progression \
@@ -99,6 +99,9 @@ check: ## manage.py check
 check-deploy: ## Contrôles de sécurité avant préproduction (§11)
 	$(COMPOSE) run --rm backend python manage.py check --deploy
 
+verif-pdf: ## Vérifie la chaîne d'export PDF (WeasyPrint + libs système)
+	$(COMPOSE) exec -T backend python manage.py verifier_pdf
+
 shell: ## Shell Django
 	$(COMPOSE) run --rm backend python manage.py shell
 
@@ -117,6 +120,15 @@ seed: ## 2e chorale de démo — dev/QA UNIQUEMENT, jamais en production
 purge-tokens: ## Purge les refresh tokens expirés (à planifier quotidiennement, cf. §5)
 	$(COMPOSE) exec -T backend python manage.py flushexpiredtokens
 	@echo "→ Tokens expirés purgés."
+
+waha-init: ## Initialise la session WhatsApp WAHA et récupère le QR d'appairage
+	@# Passe par le backend (réseau Compose) : en production le port 3000 de
+	@# WAHA n'est PAS publié, volontairement — son tableau de bord peut lier un
+	@# compte WhatsApp.
+	@$(COMPOSE) exec -T backend python manage.py waha_init
+	@docker cp choirmanager-backend:/app/waha-qr.png ./waha-qr.png 2>/dev/null \
+	  && echo "→ QR copié sur l'hôte : ./waha-qr.png" \
+	  || echo "→ Aucun QR à copier (session peut-être déjà WORKING)."
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -139,7 +151,10 @@ front-build: ## Build Angular de production (dans l'image)
 # Sauvegarde / restauration (§12)
 # ---------------------------------------------------------------------------
 sauvegarde: ## Dump PostgreSQL horodaté dans backups/
-	@mkdir -p backups
+	# `umask 077` : un dump contient TOUTES les données personnelles de la
+	# plateforme. Sans cela le fichier naît en 0644, lisible par tout compte
+	# local, dans un répertoire `backups/` lui-même en 0755.
+	@umask 077; mkdir -p backups; \
 	$(COMPOSE) exec -T db pg_dump -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -Fc \
 	  > "backups/choirmanager-$(HORODATAGE).dump"
 	@echo "→ backups/choirmanager-$(HORODATAGE).dump"
@@ -244,6 +259,7 @@ prod-deploie: ## PROD — déploie un TAG — make prod-deploie TAG=v1.2.0-rc.4
 # variables. Compose, lui, les injecte. `set -u` a révélé cette dépendance.
 prod-sauvegarde-pre-deploiement: ## Dump base + médias avant un déploiement (appelée par prod-deploie)
 	@set -Eeuo pipefail; \
+	umask 077; \
 	mkdir -p backups; \
 	base="backups/pre-$(TAG)-$(HORODATAGE)"; \
 	$(COMPOSE_PROD) exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > "$$base.dump"; \
@@ -379,6 +395,12 @@ prod-build: ## PROD — reconstruit les images
 
 prod-migrate: ## PROD — applique les migrations (service one-shot)
 	$(COMPOSE_PROD) run --rm migrate
+
+prod-waha-init: ## PROD — initialise la session WhatsApp WAHA et récupère le QR
+	@$(COMPOSE_PROD) exec -T backend python manage.py waha_init
+	@docker cp choirmanager-backend:/app/waha-qr.png ./waha-qr.png 2>/dev/null \
+	  && echo "→ QR copié sur l'hôte : ./waha-qr.png" \
+	  || echo "→ Aucun QR à copier (session peut-être déjà WORKING)."
 
 prod-logs: ## PROD — suit les logs
 	$(COMPOSE_PROD) logs -f --tail=100

@@ -8,6 +8,12 @@
 
 name: CI
 
+# Privilège minimal explicite. Sans ce bloc, `GITHUB_TOKEN` hérite des droits
+# par défaut du dépôt (souvent lecture/écriture) : une action tierce compromise
+# pourrait alors pousser du code. La CI ne fait que lire le dépôt.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, "release/**", "feat/**"]
@@ -187,3 +193,44 @@ jobs:
       # §11 : ni secret, ni donnée SQLite, ni dépôt Git, ni venv dans l'image.
       - name: Audit du contenu des images
         run: make audit-image
+
+  # --------------------------------------------------------------------------
+  audit-dependances:
+    name: Dépendances — vulnérabilités connues
+    runs-on: ubuntu-latest
+
+    # ⚠️ Les actions restent épinglées par TAG MAJEUR (`@v4`, `@v5`), pas par
+    # SHA : un tag est mutable côté GitHub, donc une compromission du dépôt
+    # d'une action modifierait ce qui s'exécute ici. L'épinglage par SHA est
+    # recommandé (constat A-14 de docs/AUDIT_SECURITE_V2.md) mais il exige de
+    # vérifier chaque commit ; il est volontairement laissé à une revue dédiée
+    # plutôt que posé à l'aveugle sur des SHA non vérifiables hors ligne.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # `requirements.txt` n'est PAS verrouillé (plages `>=x,<y`) : deux
+      # builds peuvent donc embarquer des versions différentes. pip-audit
+      # résout ces plages et échoue sur toute vulnérabilité connue — garde-fou
+      # du chantier n°10 de CLAUDE.md, jusqu'ici absent de la CI.
+      - name: pip-audit — backend
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip-audit -r chm-backend/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: chm-frontend/package-lock.json
+
+      # `--audit-level=high` : bloque sur Élevé/Critique, laisse passer une
+      # advisory « low » qui n'a pas de correctif — sans désactiver le contrôle.
+      - name: npm audit — frontend
+        working-directory: chm-frontend
+        run: npm audit --audit-level=high

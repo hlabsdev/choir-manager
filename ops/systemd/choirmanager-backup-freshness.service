@@ -4,4 +4,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# Même adresse de secours que la sauvegarde elle-même (cf. backup.service).
+EnvironmentFile=-/etc/choirmanager/backup.env
+NoNewPrivileges=true
 ExecStart=/root/choir-manager/ops/backup/check-freshness.sh

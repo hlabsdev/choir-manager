@@ -23,9 +23,33 @@ rapports. API Django REST + frontend Angular 21.
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
 passent respectivement 566 tests (6 ignorés) et 196 tests, **suite complète
-verte**. Le self-service du profil est publié sur `main` et la prochaine
-version préparée est `v1.8.0` ; son tag n'est pas encore posé et elle n'est pas
-déployée. La production reste sur `v1.7.0`.
+verte**. Le self-service du profil est publié sur `main`.
+
+**`v2.0.0` « Chœur » préparée sur la branche `feat/v2-refonte`** (superprojet
+et sous-modules), **tag non posé, non déployée** : refonte visuelle complète
+(identité « Papier & scène », polices auto-hébergées, nouvelle coquille,
+palette de commandes, tous les écrans restylés — cf.
+[docs/DESIGN_V2.md](docs/DESIGN_V2.md) et [docs/captures/](docs/captures/)),
+sécurité by design (CSP stricte, JWT révocable `pwdv`, déconnexion qui révoque
+le refresh, injection CSV neutralisée, fuite cross-tenant du pointage fermée,
+audit complet dans [docs/AUDIT_SECURITE_V2.md](docs/AUDIT_SECURITE_V2.md)),
+export RGPD du tenant, observabilité `X-Request-ID`, pointage par le chef de
+pupitre borné à son pupitre. Validation : **602 tests backend** (6 ignorés,
+sous SQLite faute de Docker), **196 tests frontend**, build de production vert.
+La production reste sur `v1.7.0` jusqu'au tag et au déploiement de `v2.0.0`.
+
+**`v2.0.1` — correctifs de recette** (même branche) : médias privés servis
+directement en dev sans Nginx, aperçu de partition en modale, sérialiseur de
+liste des répétitions exposant `resume`, auto-édition `partage_contact` pour
+un membre du staff, compteurs de pupitres (`nombre_membres`), filtre « Sans
+pupitre », organigramme en bandes, diagnostic PDF `manage.py verifier_pdf`,
+origines CSRF de développement + normalisation `Origin: null` (DEBUG
+uniquement), nommage « Chœur » harmonisé, et **canal WhatsApp transactionnel
+via WAHA** (opt-in par membre, service idempotent, throttle par tenant,
+service Compose + `make waha-init`). Validation de la branche : **632 tests
+backend** (6 ignorés sous SQLite, **638 sous PostgreSQL**) et **199 tests
+frontend**, build de production vert.
+
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
 self-service, `must_change_password`, changement volontaire d'email, et les
@@ -115,6 +139,7 @@ python manage.py makemigrations
 python manage.py migrate
 pytest -q                           # suite complète (~549 tests)
 python manage.py check
+python manage.py verifier_pdf       # diagnostic export PDF (WeasyPrint + GTK/Pango)
 python manage.py provision_chorale --nom "..." --prefix XXX \
   --admin-username ... --admin-email ... --admin-first-name ... --admin-last-name ...
 python manage.py seed_demo_chorale  # 2e chorale de démo — dev/QA uniquement
@@ -587,16 +612,17 @@ calculés à la volée, aucune image ni dépendance npm) sur les 3 écrans qui
 `shared/data/pays-indicatifs.ts` (242 entrées) généré depuis les MÊMES
 bibliothèques que le backend (`phonenumbers` + `django_countries`), jamais
 transcrit à la main — un référentiel qui diverge entre front et back donnerait
-un indicatif accepté d'un côté et rejeté de l'autre, silencieusement. `profil.
-component.ts` n'expose aujourd'hui aucune édition de téléphone — rien à y
-brancher tant que cet écran n'en a pas besoin.
+un indicatif accepté d'un côté et rejeté de l'autre, silencieusement.
+`profil.component.ts` expose l'auto-édition du téléphone (via
+`MembrePersonnelSerializer`) et le consentement WhatsApp par son endpoint
+dédié — les deux surfaces restent distinctes, cf. section WhatsApp.
 
 ### Notifications — point d'entrée unique
 
 `notifications/services.py` (`notifier`, `notifier_groupe`,
 `envoyer_email_externe`) est le SEUL point d'entrée pour créer une notification
-in-app ou envoyer un email — jamais `Notification.objects.create` directement
-dans une vue. Emails best-effort : n'utilisent plus `fail_silently=True`
+in-app, envoyer un email ou un WhatsApp — jamais `Notification.objects.create`
+directement dans une vue. Emails best-effort : n'utilisent plus `fail_silently=True`
 (qui avalait les échecs sans trace) mais un `try/except` qui journalise —
 même promesse tenue autrement : ne jamais faire échouer l'action métier qui
 les déclenche.
@@ -655,6 +681,59 @@ aucun moyen d'agir pour qui le recevait.
 `EMAIL_REPLY_TO_PLATEFORME` avec un bouton direct vers la fiche à traiter.
 Sans elles, une `DemandeChorale` ou une `Suggestion` ne se découvrait qu'en
 visitant l'admin — invisible potentiellement plus d'un jour.
+
+### Canal WhatsApp (WAHA) — opt-in, transactionnel uniquement
+
+Le canal WhatsApp est un **canal de `notifier()`** (`par_whatsapp=True`), jamais
+un second point d'entrée : `notifications/whatsapp.py::envoyer_whatsapp()` est
+le seul code qui parle à WAHA, comme `_envoyer_email` est le seul qui parle
+SMTP. Il ne part que si `Membre.whatsapp_optin=True` **et** que le numéro est
+renseigné ; le service revérifie ces deux conditions à chaque envoi, le front
+n'est jamais la barrière.
+
+**Modèle et consentement.** `notifications.NotificationWhatsApp` (hérite de
+`TimeStampedModel`) trace chaque envoi réellement tenté : numéro figé E164,
+gabarit, `idempotency_key` unique, statut (`en_attente`/`envoye`/`echec`),
+`waha_message_id`, erreur et horodatage. Une clé déjà `envoye` ne rappelle pas
+WAHA ; une clé `echec` peut être retentée. Le consentement vit sur
+`Membre.whatsapp_optin`/`whatsapp_optin_le` (timestamp remis à null au retrait),
+**par tenant** — un compte membre de deux chorales consent séparément. Endpoint
+dédié `POST /api/auth/profile/whatsapp-optin/` (`WhatsAppOptInView`) : pas de
+PATCH groupé, pas d'id dans l'URL (le serveur prend le membre du tenant actif).
+
+**Garde-fous.** `WAHA_ENABLED` est **faux par défaut** ; le résolveur
+`chm_config/env.py::resoudre_waha` refuse le démarrage si le canal est actif
+sans URL, et hors DEBUG sans `WAHA_API_KEY` (sinon le dashboard WAHA est ouvert
+et peut lier un autre WhatsApp). Throttle par tenant `WAHA_MAX_PER_MINUTE`
+(défaut 20) via `cache.add`/`incr` — le même cache Redis que les throttles DRF,
+jamais un compteur par worker. Timeout HTTP 10 s, texte brut uniquement (jamais
+de HTML), liens en clair.
+
+**Premier appelant réel.** `presences/views.py::_notifier_traitement` (demande
+d'absence approuvée ou refusée) passe `par_whatsapp=True` : c'est le cas
+transactionnel attendu, et cela rend le canal testable depuis un geste métier.
+Le reste des appels n'est pas converti — chaque ajout est une décision produit.
+
+**Périmètre volontairement limité.** `notifier_groupe()` n'expose PAS WhatsApp :
+une annonce générale est exactement ce qui fait bannir un numéro WAHA, et une
+boucle synchrone dans une requête HTTP bloquerait le worker. Le Mode B (file
+Redis + `worker_whatsapp`) n'est pas implémenté ; s'il devient nécessaire, il
+passera par une file dédiée, jamais par `notifier_groupe()` tel quel.
+
+**Déploiement.** Service `waha` dans `compose.yaml` (aucun port publié, volume
+`waha_sessions` obligatoire, `WAHA_DASHBOARD_ENABLED=false`), variables
+transmises par la pile de base. `make waha-init` crée/démarre la session et
+récupère le QR (`manage.py waha_init`, passe par le backend sur le réseau
+interne). En dev uniquement, `compose.dev.yaml` publie le port sur
+`127.0.0.1` et active le dashboard pour scanner un **QR en direct** :
+`http://127.0.0.1:3115/dashboard/` (Basic Auth `WAHA_DASHBOARD_*`).
+
+⚠️ Si WhatsApp déconnecte la session juste après le scan (`LOGOUT` dans les
+logs, « impossible de se connecter » côté téléphone), le moteur WEBJS est le
+premier suspect : passer `WHATSAPP_DEFAULT_ENGINE=NOWEB` et repartir d'un
+volume de session vide. Procédure complète — numéro dédié, scan, vérification
+`WORKING`, sauvegarde du volume, remèdes — dans
+[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
 ### Boîte à suggestions
 
@@ -737,9 +816,27 @@ utilitaires Tailwind : `.btn` (+ `.btn-primary|secondary|ghost|danger|accent`,
 `.btn-sm|lg`, `.btn-icon`), `.card`/`.glass-card`, `.field`/`.label`/`.input`
 (+ `.select`, `.switch`, `.segmented`, `.range`, `.check`/`.radio`), `.badge`
 (+ variantes sémantiques), `.modal-overlay`/`.modal-panel`,
-`.page-title`/`.page-subtitle`/`.section-title`. Palette indigo (primaire) /
-ambre (accent). Choisir le contrôle de formulaire selon la donnée : booléen →
-switch, petit choix exclusif → segmented, liste → select, plage → slider.
+`.page-title`/`.page-subtitle`/`.section-title`. **v2.0.0** remplace la palette
+indigo/ambre par l'identité « Papier & scène » : vert pin (`primary-*`), corail
+(`accent-*`), ivoire/encre, typographies **Fraunces** (affichage) et **Inter**
+(interface) auto-hébergées (`public/fonts/`), plus les classes de coquille
+`.shell`/`.sidebar`/`.topbar`/`.bottom-nav`/`.nav-*`/`.command-*` et les
+variantes `.card-pin|gold|coral|ink`, `.staff-rule`, `.eyebrow`, `.agenda-*`
+(cf. [docs/DESIGN_V2.md](docs/DESIGN_V2.md)). ⚠️ Les règles d'élément non
+layerisées priment sur les utilitaires Tailwind : ne pas y remettre de
+couleur, sinon un `text-primary-50` sur panneau sombre devient illisible.
+Choisir le contrôle de formulaire selon la donnée : booléen → switch, petit
+choix exclusif → segmented, liste → select, plage → slider.
+
+⚠️ **`angular.json` force `optimization.styles.inlineCritical=false` en
+production, et ce n'est pas un détail de performance.** L'inlining critique
+d'Angular produit `<link rel="stylesheet" media="print"
+onload="this.media='all'">` : le handler inline est bloqué par la CSP
+`script-src 'self'` du Nginx frontend, la feuille reste `media="print"` et
+**tout l'écran s'affiche sans styles** (constaté en Docker local). Ne pas
+réactiver `inlineCritical` sans ajouter un hash/nonce à la CSP — la
+formulation « aucun script inline n'est produit par le build » dans
+`chm-frontend/nginx.conf` suppose ce réglage.
 
 ## Conventions
 
@@ -838,6 +935,13 @@ besoin exprimé au lancement du module laissait la porte ouverte (« le cas
 encore tranché comme un choix produit définitif — à trancher si le besoin se
 confirme, pas à « corriger » sans validation.
 
+**Tranché et livré dans v2.0.0** : le chef de pupitre peut pointer, mais
+**strictement** les membres de son pupitre, délimité par
+`Poste.pupitre_concerne` (`core/permissions.py::PeutPointer`,
+`presences/views.py`, `presences/serializers.py`), avec tests de cloisonnement.
+Au passage, un `membre_id` d'une autre chorale est désormais refusé (fuite
+cross-tenant fermée).
+
 ## Chantiers connus, non bloquants
 
 Aucun n'empêche le pilote d'utiliser l'outil. Ordre de risque décroissant,
@@ -851,14 +955,15 @@ pas ailleurs.
 | ~~2~~ | ~~**Identité / email vérifié**~~ | **Livré** — email facultatif, unicité insensible à la casse et vérification à usage unique ; prérequis du reset self-service. |
 | ~~3~~ | ~~**Autonomie du compte — livraison**~~ | **Livré dans v1.7.0** — reset self-service réservé aux emails vérifiés, lien court signé et idempotent, garde globale `must_change_password`, changement volontaire d'email réauthentifié et trois parcours Angular. |
 | ~~4~~ | ~~**`must_change_password` backend**~~ | **Livré dans v1.7.0** — mot de passe Bureau/provisionnement généré marqué temporaire ; surface réduite à profil GET, changement du secret et logout jusqu'au choix du titulaire. |
-| 5 | **CSP stricte** | Les JWT vivent dans `localStorage` : une XSS les lit. Aucune CSP posée à ce jour. |
-| 6 | **`CHECK_REVOKE_TOKEN`** | Lierait la validité du JWT au hash du mot de passe, ramènerait la fenêtre résiduelle de 30 min à zéro. À éprouver contre les flux multi-chorale avant activation. |
-| 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. |
+| ~~5~~ | ~~**CSP stricte**~~ | **Livré dans v2.0.0 (branche `feat/v2-refonte`)** — CSP stricte sur les documents HTML (Nginx) et toutes les réponses Django (`core/middleware_securite.py`, testée) ; l'admin a été rendu compatible (script inline externalisé, polices système). ⚠️ Les JWT restent dans `localStorage` : la CSP réduit la surface XSS, elle ne remplace pas un stockage en cookie httpOnly — chantier de fond restant. |
+| ~~6~~ | ~~**`CHECK_REVOKE_TOKEN`**~~ | **Livré dans v2.0.0** — claim `pwdv` (empreinte salée du hash courant) dans le refresh puis revérifié à chaque requête ; changer son mot de passe invalide immédiatement tous les access émis avant (fenêtre résiduelle 30 min → 0). Testé : ancien access 401, nouveau 200, jeton sans claim refusé. |
+| 7 | **MFA** | Obligatoire pour l'opérateur, recommandé Bureau/Trésorier. Non livré. |
 | ~~8~~ | ~~**Journal d'audit**~~ | **Livré** — app `audit`, cf. section dédiée ci-dessus. |
-| 9 | **Observabilité** | Corrélation par requête, remontée centralisée, alertes (SMTP disponible). |
-| 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. Audit de vulnérabilités en CI à ajouter. |
+| ~~9~~ | ~~**Observabilité**~~ | **Partiellement livré dans v2.0.0** — `X-Request-ID` accepté/émis sur toute réponse et log JSON structuré corrélé ; restent la remontée centralisée et les alertes. |
+| 10 | **Verrouillage des dépendances** | `requirements.txt` en plages de versions : deux builds peuvent différer. **v2.0.0 ajoute l'audit `pip-audit`/`npm audit` en CI**, mais ne verrouille pas encore les versions (l'audit frontend relève 52 avis, dont 3 critiques dans la chaîne de build — correctifs à planifier). |
 | ~~11~~ | ~~**Import Excel — frontend et livraison**~~ | **Livré dans v1.7.0** — écran Bureau avec gabarit, aperçu, confirmation revalidée et restitution ponctuelle des mots de passe temporaires. |
 | 12 | **Self-service du profil — publication** | Publié sur `main` et préparé pour `v1.8.0` : nom, prénom, téléphone, photo et partage de contact. Tag et déploiement restent à effectuer ; la production reste sur `v1.7.0`. |
+| ~~13~~ | ~~**Canal WhatsApp (WAHA)**~~ | **Livré sur `feat/v2-refonte`, non déployé** — `NotificationWhatsApp`, opt-in `Membre.whatsapp_optin` (endpoint dédié), `envoyer_whatsapp()` idempotent et throttlé, intégration `notifier(..., par_whatsapp=True)`, admin en lecture seule, service Compose WAHA + `make waha-init`, procédure dans `docs/DEPLOIEMENT.md`. Limite assumée : pas de file Redis/worker (Mode B), `notifier_groupe()` reste in-app. |
 
 Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
 partitions hors ligne, calendrier externe, notifications push/SMS, module

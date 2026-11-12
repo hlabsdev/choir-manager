@@ -116,6 +116,9 @@ peut résulter de l'oubli d'une variable.**
 | `DATABASE_URL` | repli SQLite explicite | **démarrage refusé** |
 | `REDIS_URL` | repli LocMem explicite | **démarrage refusé** |
 | `DJANGO_COOKIE_SECURE` | sans objet | `True` |
+| `WAHA_ENABLED` | `False` | `True` via `compose.prod.yaml` (surchargeable par `.env`) |
+| `WAHA_URL` | `http://waha:3000` (Compose) | **démarrage refusé si le canal est actif et l'URL vide** |
+| `WAHA_API_KEY` | vide toléré | **démarrage refusé si le canal est actif et la clé vide** |
 
 Deux refus supplémentaires, volontairement bruyants :
 
@@ -129,6 +132,33 @@ Deux refus supplémentaires, volontairement bruyants :
   façon pas nécessaire.
 
 Un démarrage qui échoue affiche le nom exact de la variable manquante.
+
+**WhatsApp (WAHA)** est **désactivé par défaut hors Compose** et activé par
+défaut par `compose.prod.yaml` (`WAHA_ENABLED=True`) : la production doit donc
+posséder une clé. En développement, il reste coupé pour ne pas logger un échec
+par notification. Poser une clé aléatoire — la MÊME valeur est lue par WAHA et
+par Django :
+
+```bash
+# 1. Générer une clé
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# 2. Dans .env (jamais committé)
+WAHA_API_KEY=<valeur-générée>
+
+# 3. Production uniquement : ne PAS laisser WAHA_ENABLED=False dans .env,
+#    sinon l'interrupteur explicite désactive le canal. En développement,
+#    laisser False.
+WAHA_ENABLED=True
+```
+
+Sans clé, un démarrage de production avec `WAHA_ENABLED=True` est **refusé**
+avec le nom de la variable — jamais un service qui tourne sans pouvoir envoyer.
+Pour déployer sans WhatsApp, poser explicitement `WAHA_ENABLED=False`.
+
+Tant que `WAHA_ENABLED=False`, le conteneur WAHA tourne mais aucun message ne
+part : les appels à `notifier(..., par_whatsapp=True)` sont ignorés avec une
+ligne de log, sans ligne `NotificationWhatsApp`.
 
 ### ⛔ ÉTAPE BLOQUANTE — mesurer `DJANGO_NUM_PROXIES` sur l'hôte réel
 
@@ -429,6 +459,124 @@ Si `SPF : PASS` mais `DKIM : NEUTRAL` ou absent : la clé DKIM n'est pas publié
 ou pas encore propagée. Les messages partent, mais leur réputation est
 mauvaise — à corriger avant d'ouvrir le pilote à de vrais membres.
 
+### WhatsApp — initialiser la session WAHA (une seule fois)
+
+Le canal WhatsApp est **sortant** et réservé aux notifications transactionnelles
+attendues (rappel de répétition, confirmation, alerte de cotisation). Il n'est
+jamais utilisé pour une annonce générale : WAHA s'appuie sur le protocole
+WhatsApp Web, non officiel, et un usage trop agressif peut faire **bannir le
+numéro**.
+
+**Numéro dédié obligatoire.** Utiliser un numéro professionnel, prépayé, dont
+le nom de profil dit clairement « Chœur — notification automatique ». Jamais un
+numéro personnel d'un membre du bureau : un bannissement emporterait son
+WhatsApp personnel.
+
+#### Procédure (pile démarrée)
+
+```bash
+# Poste de développement (pile compose.yaml + compose.dev.yaml) :
+make waha-init
+
+# Serveur de production (toujours la pile compose.prod.yaml) :
+make prod-waha-init
+
+# → interroge le backend, qui parle à http://waha:3000 sur le réseau interne
+# → crée/démarre la session « chm-notifications »
+# → si le statut est SCAN_QR_CODE, enregistre /app/waha-qr.png et le copie
+#   dans ./waha-qr.png sur l'hôte
+```
+
+1. Ouvrir `waha-qr.png` et le scanner avec le téléphone dédié : WhatsApp →
+   **Appareils connectés** → **Connecter un appareil**.
+2. Relancer `make waha-init` : le statut doit passer à **`WORKING`**.
+3. Envoyer un message de test à un membre qui a donné son consentement
+   (Mon espace → Notifications WhatsApp).
+
+La session persiste dans le volume `waha_sessions`. **Perdre ce volume impose
+de rescanner le QR** — il fait donc partie de la sauvegarde, au même titre que
+`media_data` (cf. §7). La perte n'est pas une perte de données métier, mais elle
+interrompt le canal jusqu'à réappairage.
+
+#### Interface web WAHA (développement uniquement)
+
+En dev, `compose.dev.yaml` publie WAHA sur `127.0.0.1:${WAHA_HOST_PORT}` et
+active le dashboard. Il est protégé par **HTTP Basic** :
+
+```text
+URL      : http://127.0.0.1:3115/dashboard/
+Login    : WAHA_DASHBOARD_USERNAME (admin)
+Password : WAHA_DASHBOARD_PASSWORD
+```
+
+Le dashboard affiche le **QR en direct** et l'état de la session : c'est le
+chemin à privilégier pour scanner, car le PNG écrit par `waha_init` expire vite.
+L'API reste sur `/api/...` avec `X-Api-Key` ; le Basic Auth ne couvre que
+l'interface.
+
+Fixer ces deux variables dans `.env` avant le premier démarrage. Si elles sont
+vides, WAHA génère un mot de passe aléatoire **à chaque redémarrage** et
+l'affiche une seule fois dans ses logs (`docker compose logs waha | grep
+WAHA_DASHBOARD_PASSWORD`) — introuvable ensuite. En production, aucun port
+WAHA n'est publié : ces identifiants n'ouvrent rien de public.
+
+#### Pourquoi le port 3000 n'est pas publié en production
+
+`compose.dev.yaml` l'expose sur `127.0.0.1:3000` pour l'initialisation
+locale. `compose.prod.yaml` ne le publie pas : seul `mrs-gateway` est public.
+Exposer WAHA donnerait accès à son tableau de bord, qui affiche le QR de
+session — un tiers pourrait y lier **son** WhatsApp à la place du numéro de la
+plateforme. `make waha-init` passe par le backend, sur le réseau interne, et ne
+nécessite donc aucune ouverture de port.
+
+#### Vérifier après déploiement
+
+```bash
+# Statut de la session, sans exposer WAHA :
+make prod-waha-init
+
+# Les derniers envois et leurs échecs :
+docker compose -f compose.yaml -f compose.prod.yaml exec backend python manage.py shell -c "
+from notifications.models import NotificationWhatsApp as N
+print(list(N.objects.values('statut', 'gabarit', 'created_at')[:10]))"
+```
+
+Un `echec` avec `erreur="throttle"` signifie que `WAHA_MAX_PER_MINUTE` a été
+atteint pour cette chorale ; avec `erreur="HTTP 401"`, la clé
+`WAHA_API_KEY` diffère entre Django et WAHA (les deux la lisent dans `.env`,
+mais une modification n'est prise qu'après redémarrage des deux conteneurs).
+
+#### Si WhatsApp refuse l'appairage (`FAILED`, « impossible de se connecter »)
+
+Trois causes réelles, dans l'ordre de probabilité :
+
+1. **QR périmé.** Le PNG de `waha_init` est une photo à l'instant T ; WAHA le
+   régénère toutes les quelques secondes. Scanner depuis le **dashboard**
+   (`/dashboard/`), qui affiche la version courante, élimine ce cas.
+2. **Session fantôme / moteur WEBJS rejeté.** Si les logs montrent
+   `Session has been logged out! args=LOGOUT` juste après le scan, WhatsApp a
+   refusé la liaison. Le moteur WEBJS (Chromium) est le plus exposé. Passer à
+   NOWEB puis repartir d'une session vide :
+
+   ```bash
+   # dans .env
+   WHATSAPP_DEFAULT_ENGINE=NOWEB
+
+   docker compose -f compose.yaml -f compose.dev.yaml stop waha
+   docker compose -f compose.yaml -f compose.dev.yaml rm -f waha
+   docker volume rm choirmanager_waha_sessions
+   docker compose -f compose.yaml -f compose.dev.yaml up -d waha
+   ```
+
+3. **Appareils liés saturés ou conflit de compte.** Sur le téléphone :
+   WhatsApp → Appareils connectés → retirer les anciennes sessions
+   (WAHA/Chrome), puis rescanner. Utiliser UN seul téléphone et UN seul compte
+   pour le test ; scanner ensuite avec WhatsApp Business lie un autre compte et
+   peut déconnecter le premier.
+
+Après un scan réussi, `waha_init` doit afficher `WORKING`, et
+`NotificationWhatsApp.statut` doit passer à `envoye`.
+
 ### Purge des refresh tokens — À PLANIFIER
 
 Depuis l'activation de `rest_framework_simplejwt.token_blacklist`, **chaque
@@ -665,6 +813,36 @@ production** : utiliser un rôle de test distinct.
 make sauvegarde         # → backups/choirmanager-<horodatage>.dump
 ```
 
+#### Adresse des alertes de sauvegarde — OBLIGATOIRE
+
+Le script `ops/backup/alert-backup.sh` n'embarque plus d'adresse en dur : il
+exige `BACKUP_ALERT_EMAIL` et échoue explicitement sans elle. L'adresse vit
+dans un fichier root:root `600`, hors dépôt :
+
+```bash
+sudo install -d -m 700 /etc/choirmanager
+sudo tee /etc/choirmanager/backup.env >/dev/null <<'EOF'
+BACKUP_ALERT_EMAIL=alerte-sauvegarde@votre-domaine
+EOF
+sudo chmod 600 /etc/choirmanager/backup.env
+```
+
+Les unités `choirmanager-backup.service` et
+`choirmanager-backup-freshness.service` le chargent via
+`EnvironmentFile=-/etc/choirmanager/backup.env`. En appel manuel
+(`make prod-sauvegarde`), exporter la variable ou sourcer ce fichier ;
+
+```bash
+set -a; . /etc/choirmanager/backup.env; set +a
+make prod-sauvegarde
+```
+
+Cette adresse est une **donnée personnelle d'exploitation** : ne la remettez
+jamais dans un fichier versionné (c'était le cas, cf.
+`docs/AUDIT_SECURITE_V2.md`). Les dumps écrits par `make sauvegarde` et par
+`prod-deploie` sont créés avec `umask 077` (lisibles par root seulement) : ils
+contiennent l'intégralité des données personnelles de la plateforme.
+
 Les médias sont dans le volume `media_data` et doivent être sauvegardés
 séparément :
 
@@ -748,3 +926,97 @@ make audit-image        # ni .env, ni SQLite, ni .git, ni venv dans les images
 | 502 sur `/api/` | backend non sain ; `make logs` puis `curl` sur `/api/core/health/` |
 | Export PDF en 503 | libs GTK/Pango absentes — présentes dans l'image, à vérifier hors conteneur |
 | Styles figés | Tailwind v4 se compile hors du pipeline Angular : relancer `npm run tailwind` |
+
+## 11. Export PDF — reproductibilité dev et prod
+
+Les rapports PDF utilisent **WeasyPrint**, qui charge Pango/Cairo/GDK-Pixbuf
+via ctypes **au runtime**. Une installation Python réussie ne suffit donc pas :
+sans ces bibliothèques, l'export répond 503 « dépendances serveur manquantes »
+alors que le CSV continue de fonctionner.
+
+Diagnostic reproductible, sur tout environnement :
+
+```bash
+# pile Docker
+make verif-pdf
+# ou directement
+docker compose exec -T backend python manage.py verifier_pdf
+```
+
+Sortie 0 + taille du PDF = chaîne opérationnelle. Sortie 1 = le remède exact
+est affiché (paquets Linux, runtime GTK Windows, variable `WEASYPRINT_DLL_DIR`).
+
+**Production / Docker** : `chm-backend/Dockerfile` installe déjà `libpango`,
+`libpangocairo`, `libpangoft2`, `libgdk-pixbuf`, `libcairo2` et
+`fonts-dejavu-core`. Reconstruire l'image (`make build`) suffit.
+
+**Poste Windows (dev hors Docker)** : installer le runtime GTK 3
+(https://github.com/tschoonj/GTK-for-Windows-Runtime-Installer). **Le chemin
+standard `C:\Program Files\GTK3-Runtime Win64\bin` est détecté
+automatiquement** par `chm_config/settings.py` — aucune variable à exporter si
+l'installation est aux emplacements par défaut. Pour un chemin personnalisé,
+exporter `WEASYPRINT_DLL_DIR` vers son dossier `bin` avant `runserver` :
+
+```powershell
+$env:WEASYPRINT_DLL_DIR = "D:\GTK3\bin"
+```
+
+Vérification immédiate après installation :
+
+## 12. Développement sans Nginx (ng serve + runserver)
+
+Deux conséquences à connaître, corrigées en v2.0.1 :
+
+- **Médias privés** : en dev sans Nginx, personne n'honore
+  `X-Accel-Redirect`. Django sert donc le fichier lui-même
+  (`MEDIA_PROTEGE_SERVIR_DIRECT`, actif par défaut quand `DJANGO_DEBUG=True`).
+  En production, la variable reste fausse et Nginx seul sert les fichiers.
+- **Admin Django / CSRF** : `ng serve` (:4200) et `runserver` (:8000) sont deux
+  origines. Les origines de développement sont ajoutées automatiquement à
+  `CSRF_TRUSTED_ORIGINS` quand `DJANGO_DEBUG=True`, et un middleware de
+  développement normalise un `Origin: null` envoyé par certains aperçus
+  embarqués. Rien de tout cela n'est actif en production.
+
+## 13. Docker local sous Windows — trois pièges vérifiés
+
+Ces trois points ont réellement bloqué un premier `up` sur un poste Windows ;
+ils ne concernent pas la production, mais coûtent du temps à diagnostiquer.
+
+**1. Scripts `*.sh` en CRLF.** Un checkout Windows peut convertir
+`chm-backend/docker/entrypoint.sh` en CRLF. Le shebang devient `/bin/sh\r`,
+et le conteneur répond `exec /app/docker/entrypoint.sh: no such file or
+directory` alors que le fichier existe. `.gitattributes` force désormais
+`*.sh text eol=lf` ; sur un clone antérieur au correctif :
+`git add --renormalize .` (ou reconvertir le fichier) puis reconstruire
+`backend`.
+
+**2. Port hôte 3000 réservé par Windows.** Hyper-V/WinNAT réserve des plages
+entières (observé : 2915-3014), et Docker échoue avec
+`listen tcp4 127.0.0.1:3000: bind: An attempt was made to access a socket in a
+way forbidden by its access permissions`. Le port INTERNE de WAHA reste 3000 ;
+seul le port HÔTE change, via `WAHA_HOST_PORT` dans `.env` (3115 dans l'exemple
+local). Sans intérêt en production, où aucun port WAHA n'est publié.
+
+**3. `WAHA_API_KEY` obligatoire même en développement Docker.** Le service
+`migrate` lit `DJANGO_DEBUG` depuis `.env` (`False` par défaut), alors que
+`compose.dev.yaml` ne passe `True` qu'au service `backend`. Avec
+`WAHA_ENABLED=True` et une clé vide, `migrate` refuse donc de démarrer
+(`WAHA_ENABLED=true exige WAHA_API_KEY lorsque DJANGO_DEBUG=False`), avant
+même que le backend ne soit lancé. Poser une clé quelconque dans `.env` — elle
+est partagée par WAHA et Django — ou passer `DJANGO_DEBUG=True` dans `.env`
+pour ce poste.
+
+**4. Upload de pièce jointe → 500 `PermissionError: /app/media/annonces`.**
+Un volume `media_data` créé par une ancienne exécution peut appartenir à
+`root`, alors que le backend tourne sous l'utilisateur `chm` (uid 10001). Le
+téléversement d'une photo ou d'une pièce jointe échoue alors en 500, sans
+rapport avec le formulaire. Corriger le volume existant :
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml exec -T -u root \
+  backend chown -R chm:chm /app/media
+```
+
+Un volume recréé depuis l'image actuelle hérite déjà de `chm:chm` ; cette
+correction ne concerne que les volumes antérieurs. En production, c'est le
+propriétaire de `/srv/chm/media` sur l'hôte qui doit être aligné (cf. §7).

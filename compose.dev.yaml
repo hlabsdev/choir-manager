@@ -22,6 +22,25 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
+  waha:
+    # Nécessaire pour interroger la passerelle depuis l'hôte (curl, QR).
+    # Lié à 127.0.0.1 UNIQUEMENT : la passerelle n'a aucune raison d'être
+    # joignable depuis le réseau local, et son tableau de bord peut lier un
+    # compte WhatsApp.
+    #
+    # ⚠️ Le port HÔTE est `WAHA_HOST_PORT`, pas 3000 en dur : sous Windows,
+    # Hyper-V/WinNAT réserve des plages entières (observé : 2915-3014), et
+    # Docker échoue alors au démarrage avec « socket … access permissions ».
+    # Le port INTERNE reste 3000 — c'est celui que Django appelle.
+    ports:
+      - "127.0.0.1:${WAHA_HOST_PORT:-3000}:3000"
+    environment:
+      # Dashboard activé UNIQUEMENT en dev : il affiche le QR en direct et
+      # permet de voir l'état de la session sans relancer `waha-init` à
+      # chaque expiration. Protégé par le Basic Auth WAHA_DASHBOARD_* et
+      # jamais publié hors de 127.0.0.1. La pile de base le garde fermé.
+      WAHA_DASHBOARD_ENABLED: "true"
+
   backend:
     environment:
       # Traces Django lisibles pendant le développement. La configuration reste

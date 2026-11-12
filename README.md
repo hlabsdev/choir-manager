@@ -34,11 +34,35 @@ Git.
 | Frontend | `https://github.com/hlabsdev/chm-frontend.git` |
 | Ligne de développement | `main` — **unique**, dans les trois dépôts ; les tags s'y posent |
 | Dernier jalon publié | tag annoté `v1.7.0` (autonomie du compte et import Excel) |
-| Prochaine version préparée | `v1.8.0` — self-service du profil ; tag non posé, non déployée |
+| Version préparée en cours | **`v2.0.0`** — refonte visuelle « Chœur » et sécurité by design, sur la branche `feat/v2-refonte` ; tag non posé, non déployée |
 
 Le commit backend/frontend exact figé par un tag se lit sur le pointeur de
 sous-module à ce tag (`git show <tag>:chm-backend`) — ne pas le dupliquer ici,
 il diverge à chaque nouveau tag.
+
+## Version 2.0 — « Chœur » {#version-2}
+
+> **Nommage** : « **Chœur** » est le nom d'usage de l'interface v2 ;
+> « **ChoirManager** » reste le nom du produit, du dépôt et de la plateforme.
+> L'interface n'affiche plus que « Chœur » ; la v1 indigo/ambre est conservée
+> sur `main` et en production tant que `v2.0.0` n'est pas taguée.
+
+La branche `feat/v2-refonte` prépare une version majeure :
+
+- **refonte visuelle complète** — identité « Papier & scène » (vert pin, corail,
+  ivoire), Fraunces + Inter auto-hébergées, nouvelle coquille, palette de
+  commandes, dashboard, pointage mobile et tous les modules restylés
+  ([docs/DESIGN_V2.md](docs/DESIGN_V2.md), captures dans
+  [docs/captures/](docs/captures/)) ;
+- **sécurité by design** — CSP stricte, JWT révocable au changement de mot de
+  passe, déconnexion qui révoque réellement le refresh, neutralisation des
+  injections CSV, fermeture d'une fuite cross-tenant du pointage, audit complet
+  ([docs/AUDIT_SECURITE_V2.md](docs/AUDIT_SECURITE_V2.md)) ;
+- **améliorations produit** — export RGPD du tenant, observabilité par
+  `X-Request-ID`, pointage par le chef de pupitre borné à son pupitre.
+
+Le détail, les résultats de tests (602 backend / 196 frontend) et les limites
+sont dans [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 ## Site en ligne
 
@@ -61,7 +85,7 @@ travail à venir et les chantiers connus sont centralisés dans
 | Répertoire | Opérationnel | Chants, thèmes, médias (partitions, audio par pupitre/tutti/accompagnement) et suivi des chants travaillés |
 | Finances | Opérationnel | Journal de caisse, catégories, tarifs, campagnes, cotisations et paiements |
 | Communications | Opérationnel | Annonces et pièces jointes |
-| Notifications | Opérationnel | Notifications in-app, compteur de non-lues et emails ciblés best-effort |
+| Notifications | Opérationnel | In-app, compteur de non-lues, emails ciblés et WhatsApp transactionnel (opt-in, via WAHA) — tous best-effort |
 | Rapports | Opérationnel | Finances, présences, effectifs, répertoire, exports CSV et PDF |
 | Dashboard | Opérationnel | Indicateurs et actions adaptés au rôle |
 
@@ -342,9 +366,17 @@ suivantes doivent être explicitement définies hors développement :
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Identifiants SMTP |
 | `EMAIL_USE_TLS` | Activation de TLS |
 | `DEFAULT_FROM_EMAIL` | Adresse d'expédition |
+| `WAHA_ENABLED` | Active le canal WhatsApp (`False` par défaut) |
+| `WAHA_URL` | URL interne de la passerelle WAHA (ex. `http://waha:3000`) |
+| `WAHA_SESSION` | Nom de la session WhatsApp appairée |
+| `WAHA_API_KEY` | Clé d'API WAHA, obligatoire en production quand le canal est actif |
+| `WAHA_MAX_PER_MINUTE` | Plafond d'envois par chorale et par minute (défaut 20) |
 
 En développement, les emails sont écrits dans la console. Les notifications
-email sont best-effort : un échec d'envoi ne doit pas annuler l'action métier.
+email et WhatsApp sont best-effort : un échec d'envoi ne doit pas annuler
+l'action métier. Le canal WhatsApp exige un consentement explicite du membre
+(Mon espace → Notifications WhatsApp) et un numéro dédié, appairé une fois via
+`make waha-init` (cf. [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md)).
 
 Le frontend déduit actuellement l'hôte de l'API depuis
 `window.location.hostname` et utilise `http://<hôte>:8000/api`. Cette
@@ -373,7 +405,7 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient ~427 tests couvrant notamment l'authentification, l'isolation
+La suite contient ~638 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
 présences, la musique (dont les médias du répertoire), les finances, les
 annonces, les notifications, les rapports et la suspension d'une chorale.

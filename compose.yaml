@@ -1,7 +1,7 @@
 # ============================================================================
 # ChoirManager — Pile production-like
 # ============================================================================
-# Quatre services : db, migrate (one-shot), backend, frontend.
+# Six services : db, redis, waha, migrate (one-shot), backend, frontend.
 #
 # Ordre de démarrage garanti par les conditions :
 #   db (healthy) → migrate (completed successfully) → backend (healthy) → frontend
@@ -92,6 +92,59 @@ services:
     networks: [chm]
 
   # --------------------------------------------------------------------------
+  # Passerelle WhatsApp — WAHA (canal SORTANT uniquement)
+  # --------------------------------------------------------------------------
+  # Pourquoi un conteneur séparé plutôt qu'un appel direct à l'API WhatsApp
+  # Cloud : WAHA est une passerelle auto-hébergée (protocole WhatsApp Web, non
+  # officiel) qui permet d'envoyer depuis un numéro dédié sans compte Meta
+  # Business. Contrainte acceptée : un usage trop agressif peut faire bannir le
+  # numéro — d'où le throttle par tenant côté Django.
+  #
+  # AUCUN `ports:` : WAHA n'est joignable que depuis le réseau Compose, où
+  # Django l'appelle via `http://waha:3000`. Publier 3000 exposerait son
+  # tableau de bord, qui affiche le QR de session — un tiers pourrait y lier
+  # SON propre WhatsApp. L'initialisation se fait par tunnel SSH ou `docker
+  # exec` (cf. docs/DEPLOIEMENT.md § « Initialiser la session WhatsApp »).
+  waha:
+    container_name: choirmanager-waha
+    # ⚠️ `latest` par simplicité pour ce lot. Avant d'exploiter en production,
+    # figer un tag précis (`devlikeapro/waha:2026.x.y`) : une mise à jour
+    # majeure de la passerelle peut changer le format des réponses de session.
+    image: devlikeapro/waha:latest
+    restart: unless-stopped
+    environment:
+      # Le tableau de bord web n'est pas nécessaire en régime normal : il
+      # révèle le QR d'appairage. La session s'initialise une fois, à la main.
+      WAHA_DASHBOARD_ENABLED: "false"
+      # Moteur WhatsApp. WEBJS pilote un Chromium ; NOWEB/GOWS parlent le
+      # protocole WhatsApp Web sans navigateur. Le WEBJS de `latest` peut être
+      # déconnecté par WhatsApp juste après le scan (observé : session
+      # `LOGOUT` deux secondes après le appairage). NOWEB est le repli à
+      # essayer en premier ; le changer ne touche pas l'API HTTP Django.
+      WHATSAPP_DEFAULT_ENGINE: "${WHATSAPP_DEFAULT_ENGINE:-WEBJS}"
+      # Identifiants de l'interface web (dashboard/Swagger) servie à la racine
+      # en développement. Sans eux, WAHA en génère de nouveaux À CHAQUE
+      # REDÉMARRAGE et les affiche dans ses logs — introuvables ensuite.
+      # En production, aucun port WAHA n'est publié : ces valeurs n'ouvrent
+      # rien de public, mais restent à ne pas réutiliser telles quelles.
+      WAHA_DASHBOARD_USERNAME: "${WAHA_DASHBOARD_USERNAME:-admin}"
+      WAHA_DASHBOARD_PASSWORD: "${WAHA_DASHBOARD_PASSWORD:-}"
+      WHATSAPP_SWAGGER_USERNAME: "${WHATSAPP_SWAGGER_USERNAME:-admin}"
+      WHATSAPP_SWAGGER_PASSWORD: "${WHATSAPP_SWAGGER_PASSWORD:-}"
+      # Même clé que celle transmise au backend : Django l'envoie en `X-Api-Key`
+      # à chaque requête. Vide en développement, obligatoire en production
+      # (le résolveur `chm_config/env.py` refuse de démarrer sinon).
+      WAHA_API_KEY: "${WAHA_API_KEY:-}"
+      # Sans ce volume, la session WhatsApp est perdue à chaque redémarrage :
+      # il faudrait rescanner le QR, éventuellement en pleine nuit.
+      WAHA_PRINT_QR: "false"
+    volumes:
+      - waha_sessions:/app/.sessions
+    expose:
+      - "3000"
+    networks: [chm]
+
+  # --------------------------------------------------------------------------
   # Migrations — service one-shot
   # --------------------------------------------------------------------------
   migrate:
@@ -168,6 +221,17 @@ services:
       # trace — le pire des trois. Pour la vérification et le reset, le lien
       # EST le contenu utile : le message reçu ne servait à rien.
       SITE_URL: ${SITE_URL:-}
+      # --- WhatsApp / WAHA ---------------------------------------------------
+      # `WAHA_ENABLED=false` par défaut ici : la pile de base reste démarrable
+      # sans WhatsApp. `compose.prod.yaml` le passe à true par défaut ; dans
+      # les deux cas, l'activer exige WAHA_API_KEY (sinon démarrage refusé,
+      # jamais un service silencieusement inopérant). `WAHA_URL` n'est jamais
+      # en dur dans une vue : tout passe par ces réglages.
+      WAHA_ENABLED: ${WAHA_ENABLED:-False}
+      WAHA_URL: ${WAHA_URL:-http://waha:3000}
+      WAHA_SESSION: ${WAHA_SESSION:-chm-notifications}
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+      WAHA_MAX_PER_MINUTE: ${WAHA_MAX_PER_MINUTE:-20}
       # Mêmes variables oubliées, conséquence bien plus douce : elles ont un
       # défaut sûr dans settings.py (24 h / 30 min), donc les valeurs du `.env`
       # étaient seulement ignorées en silence, jamais dangereuses.
@@ -225,11 +289,12 @@ services:
       backend:
         condition: service_healthy   # le proxy /api/ exige un backend sain
     # Seul port utilisateur de la pile. `FRONTEND_BIND` décide de son
-    # exposition : 127.0.0.1 pour la boucle locale seule, 0.0.0.0 pour
-    # joindre la pile depuis un autre appareil du réseau — ce dernier cas
-    # suppose un réseau de confiance, la pile n'ayant pas de TLS.
+    # exposition : 127.0.0.1 (DÉFAUT SÛR) pour la boucle locale seule,
+    # 0.0.0.0 pour joindre la pile depuis un autre appareil du réseau — ce
+    # dernier cas suppose un réseau de confiance, la pile n'ayant pas de TLS,
+    # et doit donc rester un choix EXPLICITE (`.env`), jamais un défaut.
     ports:
-      - "${FRONTEND_BIND:-0.0.0.0}:${FRONTEND_PORT:-8080}:8080"
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
     volumes:
       # Les médias sont servis directement par Nginx : hors DEBUG, Django ne
       # sert pas MEDIA_URL (cf. chm_config/urls.py).
@@ -245,6 +310,10 @@ services:
 volumes:
   postgres_data:
   media_data:
+  # Session WhatsApp appairée. À SAUVEGARDER avec la base : sans elle, il faut
+  # rescanner le QR avec le téléphone de la plateforme. Ce n'est pas une donnée
+  # métier, mais c'est une donnée d'exploitation dont la perte se voit.
+  waha_sessions:
 
 networks:
   chm:
