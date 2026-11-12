@@ -44,8 +44,7 @@ Les codes sont à rapprocher des modules réels en phase 1 de A2.
 | SMS | payant | **VALIDÉ : payant** |
 | WhatsApp | payant | **VALIDÉ : payant** |
 | Audio (MediaChant) | payant | **VALIDÉ : payant** |
-| Finances — caisse (mouvements, catégories, état de caisse) et paiements de cotisations | libre | **DÉCIDÉ : libre — la caisse n'est PAS verrouillée** |
-| Finances — gestion fine des campagnes de cotisation (création/édition `CampagneCotisation` + `TarifCotisation`) | payant | **DÉCIDÉ : payant** |
+| Finances — TOUT (caisse, mouvements, catégories, état de caisse, campagnes, tarifs, cotisations, paiements) | payant | **DÉCIDÉ : tout payant** — retour à la proposition initiale (amendement humain du 12/11) |
 | Exports | payant | **VALIDÉ : payant** |
 
 ## 2 bis. Décision opérateur (chantier tableaux de bord / mode assisté)
@@ -76,6 +75,17 @@ Les codes sont à rapprocher des modules réels en phase 1 de A2.
 - La règle du `CLAUDE.md` (« l'opérateur n'a aucun droit métier ») est
   amendée en conséquence, pas contournée : le mode assisté est une surface
   explicite et auditée, pas une extension des mandats.
+
+## 2 ter. Refonte de la navigation (lot P5)
+
+- La barre latérale s'allonge (12 entrées). Objectif : une navigation
+  **à deux niveaux** — 5 à 6 destinations principales, et un **hub
+  Administration** qui regroupe Membres, Finances, Assiduité, Rapports,
+  Listes et Structure.
+- Fil d'Ariane dans les hubs (règle UX : 3+ niveaux), cibles tactiles
+  ≥ 44 px, focus clavier visible, lien d'évitement.
+- Conserver l'identité « Papier & scène » (vert pin/corail, Fraunces +
+  Inter) : ne pas importer une palette générique.
 
 ## 3. Décisions déjà prises (communes aux trois tâches)
 
