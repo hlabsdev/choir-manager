@@ -184,3 +184,20 @@ Captures : [mobile-planning.png](captures/mobile-planning.png),
 [mobile-assiduite.png](captures/mobile-assiduite.png),
 [modal-planning-mobile.png](captures/modal-planning-mobile.png),
 [modal-musique-mobile.png](captures/modal-musique-mobile.png).
+
+## 10. Récurrences et SMS (étape 2)
+
+Le formulaire « Nouveau rendez-vous » porte désormais une section
+**Récurrence** : fréquence, intervalle, jours (hebdomadaire), date de fin.
+La liste **Récurrences** permet de régénérer ou d'arrêter une série. Une
+occurrence reste éditable individuellement depuis sa fiche (Modifier /
+Annuler l’occurrence) ; une occurrence éditée ou annulée n’est jamais écrasée
+par une régénération.
+
+Le drapeau **Envoyer aussi un SMS** est explicite et désactivé par défaut : le
+SMS est un canal payant. Il n’est proposé que pour les événements/séries, pas
+pour les annonces générales.
+
+Captures : [planning-recurrence-form.png](captures/planning-recurrence-form.png),
+[planning-series-modal.png](captures/planning-series-modal.png),
+[mobile-planning-recurrence-form.png](captures/mobile-planning-recurrence-form.png).

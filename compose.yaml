@@ -245,6 +245,13 @@ services:
       WAHA_SESSION: ${WAHA_SESSION:-chm-notifications}
       WAHA_API_KEY: ${WAHA_API_KEY:-}
       WAHA_MAX_PER_MINUTE: ${WAHA_MAX_PER_MINUTE:-20}
+      # SMS — passerelle WassaSMS. Fermé par défaut : le drapeau notifier_sms
+      # d'une série ne suffit pas, il faut aussi une clé configurée.
+      SMS_ENABLED: ${SMS_ENABLED:-False}
+      SMS_API_URL: ${SMS_API_URL:-http://www.wassasms.com/wassasms/api/web/v3/sends}
+      SMS_API_KEY: ${SMS_API_KEY:-}
+      SMS_SENDER: ${SMS_SENDER:-Choeur}
+      SMS_MAX_PER_MINUTE: ${SMS_MAX_PER_MINUTE:-20}
       # Mêmes variables oubliées, conséquence bien plus douce : elles ont un
       # défaut sûr dans settings.py (24 h / 30 min), donc les valeurs du `.env`
       # étaient seulement ignorées en silence, jamais dangereuses.

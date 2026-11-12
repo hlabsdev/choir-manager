@@ -46,8 +46,8 @@ pupitre », organigramme en bandes, diagnostic PDF `manage.py verifier_pdf`,
 origines CSRF de développement + normalisation `Origin: null` (DEBUG
 uniquement), nommage « Chœur » harmonisé, et **canal WhatsApp transactionnel
 via WAHA** (opt-in par membre, service idempotent, throttle par tenant,
-service Compose + `make waha-init`). Validation de la branche : **642 tests
-backend** (6 ignorés sous SQLite) et **211 tests frontend**, build de
+service Compose + `make waha-init`). Validation de la branche : **651 tests
+backend** (6 ignorés sous SQLite) et **212 tests frontend**, build de
 production vert.
 
 **`feat/planning-notifs-analytics` — étape 2 (branche courte, non déployée)** :
@@ -759,12 +759,35 @@ logique : supprimer un concert ne doit pas emporter les réponses (même
 contrepartie que les autres parents — les lectures filtrent
 `evenement__is_deleted=False`).
 
+**Récurrences.** `planning.Serie` est le modèle PARTAGÉ des répétitions et des
+événements récurrents. Une occurrence reste une vraie ligne métier :
+`presences.Repetition` (pointage inchangé) ou `planning.Evenement` (RSVP
+inchangé), avec une FK `serie`. `planning/services.py::materialiser_serie()`
+génère les dates (quotidien / hebdomadaire avec jours ISO 1–7 / mensuel) entre
+`date_debut` et `date_fin`, plafonnées à 200. Une occurrence éditée
+(`modifie_manuellement`) ou annulée (`annule_manuellement`) n'est jamais
+écrasée ni ressuscitée. `regenerer` remplace les occurrences futures sans
+pointage/réponse ; `arreter` archive la série et supprime logiquement le futur.
+Ne jamais contourner ce service pour créer une occurrence de série : il porte
+l'idempotence et les règles de préservation.
+
+**SMS (WassaSMS).** `notifications/sms.py::envoyer_sms()` est le SEUL point
+d'entrée HTTP. `SMS_ENABLED` est faux par défaut ; hors activation, aucune
+ligne `NotificationSMS` n'est créée. Le canal est PAYANT et idempotent
+(clé unique) : une occurrence/série ne l'utilise que si `notifier_sms=True`,
+et le service revérifie la config et le numéro. `envoyer_sms_groupe()` est
+plafonné ; il ne sert qu'au premier SMS d'une série ou d'un événement, jamais
+à chaque occurrence future. Le cron de rappels ajoute un SMS par occurrence
+uniquement si l'événement a `notifier_sms=True`. Aucun envoi WhatsApp/SMS de
+masse, aucune clé dans le dépôt ou les logs.
+
 **Notifications.** La création d'un événement notifie en in-app tous les
 membres actifs/stagiaires sauf l'auteur (`notifier_groupe`). La commande
 `manage.py rappeler_evenements --jours 1` envoie un rappel in-app + email
 **une fois par jour** (`Evenement.dernier_rappel_le`) ; elle est idempotente et
 planifiable en cron. Pas de WhatsApp pour ces rappels : ils partent à toute la
 chorale, donc c'est un envoi de masse — le canal WhatsApp reste transactionnel.
+Le SMS de rappel suit le même drapeau `notifier_sms` et reste borné.
 
 **Analytique.** `GET /api/presences/analytique/` (bureau / maître de chœur)
 agrège le pointage existant : totaux, taux `(présents + retards) / total`,
@@ -1016,11 +1039,11 @@ pas ailleurs.
 | ~~11~~ | ~~**Import Excel — frontend et livraison**~~ | **Livré dans v1.7.0** — écran Bureau avec gabarit, aperçu, confirmation revalidée et restitution ponctuelle des mots de passe temporaires. |
 | 12 | **Self-service du profil — publication** | Publié sur `main` et préparé pour `v1.8.0` : nom, prénom, téléphone, photo et partage de contact. Tag et déploiement restent à effectuer ; la production reste sur `v1.7.0`. |
 | ~~13~~ | ~~**Canal WhatsApp (WAHA)**~~ | **Livré sur `feat/v2-refonte`, non déployé** — `NotificationWhatsApp`, opt-in `Membre.whatsapp_optin` (endpoint dédié), `envoyer_whatsapp()` idempotent et throttlé, intégration `notifier(..., par_whatsapp=True)`, admin en lecture seule, service Compose WAHA + `make waha-init`, procédure dans `docs/DEPLOIEMENT.md`. Limite assumée : pas de file Redis/worker (Mode B), `notifier_groupe()` reste in-app. |
-| ~~14~~ | ~~**Planning & assiduité**~~ | **Livré sur `feat/planning-notifs-analytics`, non déployé** — app `planning` (Evenement, ReponseEvenement), calendrier unifié répétitions/événements, RSVP, rappels in-app + email, `/api/presences/analytique/`, écrans `/planning` et `/statistiques`. Restent : export iCal, push web et rappels WhatsApp ciblés. |
+| ~~14~~ | ~~**Planning & assiduité**~~ | **Livré sur `feat/planning-notifs-analytics`, non déployé** — app `planning` (Evenement, ReponseEvenement, **Serie**), calendrier unifié, RSVP, séries récurrentes répétitions/événements avec génération idempotente, édition/annulation d'occurrences, rappels in-app + email + **SMS WassaSMS optionnel**, `/api/presences/analytique/`, écrans `/planning` et `/statistiques`. Restent : export iCal, push web et rappels WhatsApp ciblés. |
 
 Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
-partitions hors ligne, calendrier externe (export iCal), notifications
-push/SMS, finalisation du module Planning (rappels push), application native.
+partitions hors ligne, calendrier externe (export iCal), notifications push,
+application native. Le SMS est livré mais reste optionnel et payant.
 
 ## Pour aller plus loin
 

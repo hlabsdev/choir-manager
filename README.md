@@ -82,11 +82,11 @@ travail à venir et les chantiers connus sont centralisés dans
 | Structure | Opérationnel | Pupitres, postes, mandats, groupes et organigramme |
 | Onboarding | Opérationnel | Demande de chorale modérée, provisionnement opérateur, invitation choriste |
 | Présences | Opérationnel | Répétitions, pointage mobile, permissions d'absence, validations et tableau de bord d'assiduité |
-| Planning | Opérationnel | Calendrier unifié répétitions/concerts, RSVP, rappels in-app + email |
+| Planning | Opérationnel | Calendrier unifié répétitions/concerts, RSVP, séries récurrentes, édition/annulation d'occurrences, rappels in-app + email + SMS optionnel |
 | Répertoire | Opérationnel | Chants, thèmes, médias (partitions, audio par pupitre/tutti/accompagnement) et suivi des chants travaillés |
 | Finances | Opérationnel | Journal de caisse, catégories, tarifs, campagnes, cotisations et paiements |
 | Communications | Opérationnel | Annonces et pièces jointes |
-| Notifications | Opérationnel | In-app, compteur de non-lues, emails ciblés et WhatsApp transactionnel (opt-in, via WAHA) — tous best-effort |
+| Notifications | Opérationnel | In-app, compteur de non-lues, emails ciblés, WhatsApp transactionnel (opt-in, via WAHA) et SMS WassaSMS optionnel — tous best-effort |
 | Rapports | Opérationnel | Finances, présences, effectifs, répertoire, exports CSV et PDF |
 | Dashboard | Opérationnel | Indicateurs et actions adaptés au rôle |
 
@@ -372,6 +372,11 @@ suivantes doivent être explicitement définies hors développement :
 | `WAHA_SESSION` | Nom de la session WhatsApp appairée |
 | `WAHA_API_KEY` | Clé d'API WAHA, obligatoire en production quand le canal est actif |
 | `WAHA_MAX_PER_MINUTE` | Plafond d'envois par chorale et par minute (défaut 20) |
+| `SMS_ENABLED` | Active le canal SMS WassaSMS (`False` par défaut) |
+| `SMS_API_URL` | Endpoint WassaSMS (défaut documenté) |
+| `SMS_API_KEY` | Clé WassaSMS, jamais committée |
+| `SMS_SENDER` | Expéditeur SMS (11 caractères max) |
+| `SMS_MAX_PER_MINUTE` | Plafond SMS par chorale et par minute (défaut 20) |
 
 En développement, les emails sont écrits dans la console. Les notifications
 email et WhatsApp sont best-effort : un échec d'envoi ne doit pas annuler
@@ -406,7 +411,7 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient ~642 tests couvrant notamment l'authentification, l'isolation
+La suite contient ~651 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
 présences, la musique (dont les médias du répertoire), les finances, les
 annonces, les notifications, les rapports et la suspension d'une chorale.
@@ -461,7 +466,7 @@ suivant, il ne réécrit pas le précédent.
 
 Vidéo (déclarée dans le modèle `MediaChant`, non implémentée), notifications
 push et SMS, calendrier externe, application native, fonctionnement
-PWA/offline avancé et module Activités/Planning complet.
+PWA/offline avancé et export calendrier externe (iCal).
 
 ## Documentation complémentaire
 

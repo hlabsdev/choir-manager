@@ -577,6 +577,38 @@ Trois causes réelles, dans l'ordre de probabilité :
 Après un scan réussi, `waha_init` doit afficher `WORKING`, et
 `NotificationWhatsApp.statut` doit passer à `envoye`.
 
+### SMS WassaSMS — canal payant, fermé par défaut
+
+Le canal est utilisé uniquement par les séries/occurrences marquées
+`notifier_sms=True`. Il n'envoie jamais de SMS pour une annonce générale.
+
+Variables `.env` / `env.prod` :
+
+```dotenv
+SMS_ENABLED=True
+SMS_API_URL=http://www.wassasms.com/wassasms/api/web/v3/sends
+SMS_API_KEY=<clé_WassaSMS>
+SMS_SENDER=Choeur          # 11 caractères max, sans caractère spécial
+SMS_MAX_PER_MINUTE=20
+```
+
+`SMS_ENABLED=False` (défaut) désactive complètement le canal, même si une
+série porte `notifier_sms=True`. La clé ne doit jamais être committée,
+affichée dans les logs ou recopiée dans un ticket.
+
+Contrôle après déploiement :
+
+```bash
+make prod-shell
+# dans le shell Django :
+from notifications.models import NotificationSMS
+NotificationSMS.objects.order_by("-created_at")[:5]
+```
+
+Un SMS réel n'est **pas** envoyé pendant le déploiement. Pour le tester,
+créer un événement de test avec « Envoyer aussi un SMS », puis vérifier
+`NotificationSMS` (statut `envoye`/`echec`) et la consommation WassaSMS.
+
 ### Rappels d'événements — À PLANIFIER
 
 Le module Planning envoie un rappel in-app + email aux membres actifs des
