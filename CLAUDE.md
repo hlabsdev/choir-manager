@@ -47,7 +47,7 @@ origines CSRF de développement + normalisation `Origin: null` (DEBUG
 uniquement), nommage « Chœur » harmonisé, et **canal WhatsApp transactionnel
 via WAHA** (opt-in par membre, service idempotent, throttle par tenant,
 service Compose + `make waha-init`). Validation de la branche : **642 tests
-backend** (6 ignorés sous SQLite) et **210 tests frontend**, build de
+backend** (6 ignorés sous SQLite) et **211 tests frontend**, build de
 production vert.
 
 **`feat/planning-notifs-analytics` — étape 2 (branche courte, non déployée)** :
@@ -772,10 +772,20 @@ par pupitre, par membre, série par date, et signal « à relancer » à partir 
 3 pointages sous 60 %. Aucune nouvelle saisie — l'écran `/statistiques` ne fait
 que lire. Les répétitions supprimées sont exclues, comme partout.
 
-**Front.** `/planning` (grille mensuelle, liste à venir, création staff, RSVP)
-et `/statistiques` (KPI, pupitres, série, membres). Le calendrier utilise les
-classes `.planning-*` et l'analytique `.analytics-*` de `styles.css`, dans la
-même palette « Papier & scène » — pas de second système de design.
+**Front.** `/planning` (grille mensuelle sur desktop, agenda sous 640 px,
+liste à venir, création staff, RSVP) et `/statistiques` (KPI, pupitres, série,
+membres, filtre pupitre et export CSV). Le lien « Assiduité » est aussi exposé
+depuis `/rapports` pour les rôles autorisés. Le calendrier utilise les classes
+`.planning-*` et l'analytique `.analytics-*` de `styles.css`, dans la même
+palette « Papier & scène » — pas de second système de design.
+
+**Modales.** `.route-enter` ne doit PAS conserver un `animation-fill-mode`
+(`both`) : l'opacité finale maintient un contexte d'empilement et les modales
+passent sous la barre supérieure / la barre mobile. Le conteneur
+`.modal-overlay` est en `align-items:flex-start` avec `margin:auto` sur le
+panneau, et les panneaux sans scroll interne reçoivent un `max-height` +
+`overflow-y:auto` — sinon un formulaire plus haut que le viewport est centré
+au-delà du haut de l'écran.
 
 ### Boîte à suggestions
 
