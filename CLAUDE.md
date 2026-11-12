@@ -535,6 +535,13 @@ par `manage.py seed_listes`. Le pilote valide `type_evenement` et
 `categorie_pupitre` contre la liste **active** du tenant, avec repli sur les
 choix historiques si la liste n'est pas semée (jamais de blocage brutal).
 
+**Correctif de la branche.** `PaiementCotisationViewSet` filtrait `chorale`
+alors que `PaiementCotisation` n'a pas de FK directe (rattaché via sa
+cotisation) : la liste des paiements renvoyait une 500 `FieldError`. Corrigé
+par `chorale_lookup = "cotisation__chorale"`, avec un test de non-régression
+dans `finances/tests/test_isolation_tenant.py` (200 + paiements d'un autre
+tenant invisibles).
+
 **Front.** `shared/services/listes.service.ts` (cache par session, purgé au
 changement de tenant par `purgerEtatApplicatif`), `shared/components/select-liste/`,
 écran `/structure/listes` (bureau/MDC). Le planning utilise les valeurs et
