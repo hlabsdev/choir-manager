@@ -49,7 +49,8 @@ env: ## Crée .env à partir du modèle (ne l'écrase jamais)
 config: ## Valide et affiche la configuration Compose résolue
 	$(COMPOSE) config
 
-build: ## Construit les images backend et frontend
+build: ## Construit backend/frontend et télécharge l'image WAHA
+	$(COMPOSE) pull waha
 	$(COMPOSE) build --pull
 
 up: ## Démarre la pile production-like (db → migrate → backend → frontend)
@@ -126,6 +127,7 @@ waha-init: ## Initialise la session WhatsApp WAHA et récupère le QR d'appairag
 	@# Passe par le backend (réseau Compose) : en production le port 3000 de
 	@# WAHA n'est PAS publié, volontairement — son tableau de bord peut lier un
 	@# compte WhatsApp.
+	@$(COMPOSE) up -d --wait waha
 	@$(COMPOSE) exec -T backend python manage.py waha_init
 	@docker cp choirmanager-backend:/app/waha-qr.png ./waha-qr.png 2>/dev/null \
 	  && echo "→ QR copié sur l'hôte : ./waha-qr.png" \
@@ -391,7 +393,8 @@ prod-up: ## PROD — démarre (ou met à jour) la pile
 prod-down: ## PROD — arrête la pile en CONSERVANT les données (jamais -v)
 	$(COMPOSE_PROD) down
 
-prod-build: ## PROD — reconstruit les images
+prod-build: ## PROD — reconstruit backend/frontend et télécharge WAHA
+	$(COMPOSE_PROD) pull waha
 	$(COMPOSE_PROD) build
 
 prod-migrate: ## PROD — applique les migrations (service one-shot)
@@ -401,6 +404,7 @@ prod-rappels: ## PROD — envoie les rappels des événements à venir (à plani
 	$(COMPOSE_PROD) exec -T backend python manage.py rappeler_evenements --jours 1
 
 prod-waha-init: ## PROD — initialise la session WhatsApp WAHA et récupère le QR
+	@$(COMPOSE_PROD) up -d --wait waha
 	@$(COMPOSE_PROD) exec -T backend python manage.py waha_init
 	@docker cp choirmanager-backend:/app/waha-qr.png ./waha-qr.png 2>/dev/null \
 	  && echo "→ QR copié sur l'hôte : ./waha-qr.png" \

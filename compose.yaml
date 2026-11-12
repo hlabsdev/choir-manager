@@ -142,6 +142,19 @@ services:
       - waha_sessions:/app/.sessions
     expose:
       - "3000"
+    # `waha-init` attend ce contrôle avant d'appeler l'API. Il couvre le cas
+    # du tout premier lancement, où l'image doit être extraite puis le serveur
+    # Node initialisé avant que le nom DNS `waha` devienne réellement utile.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const s=require('net').connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000)"
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 15s
     networks: [chm]
 
   # --------------------------------------------------------------------------
