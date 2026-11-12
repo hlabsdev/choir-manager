@@ -22,8 +22,15 @@ rapports. API Django REST + frontend Angular 21.
 **État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.7.0`, sur
 https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
-passent respectivement 566 tests (6 ignorés) et 196 tests, **suite complète
+passent respectivement 664 tests (6 ignorés) et 214 tests, **suite complète
 verte**. Le self-service du profil est publié sur `main`.
+
+**`v2.3.0` — cartes du répertoire et aperçu PDF, taguée sur `main`, non
+déployée** : les résumés de chant exposent le dernier statut réel et les
+compteurs `MediaChant` partition/audio (hors corbeille), et la CSP autorise
+l'iframe `blob:` strictement nécessaire à l'aperçu de partition via
+`frame-src 'self' blob:`. Validation : 664 tests backend (6 ignorés), 214 tests
+frontend et build de production verts.
 
 **`v2.0.0` « Chœur » préparée sur la branche `feat/v2-refonte`** (superprojet
 et sous-modules), **tag non posé, non déployée** : refonte visuelle complète
