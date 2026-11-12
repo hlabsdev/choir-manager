@@ -486,6 +486,8 @@ mandats.
 
 ### Listes de sélection par tenant (`core.Liste` / `core.ValeurListe`)
 
+> Détail (modèle, API, cache, migration, décisions) : [docs/LISTES_SELECTION.md](docs/LISTES_SELECTION.md).
+
 Certains choix étaient figés dans le code (types de rendez-vous, catégories de
 pupitre, styles, types de campagne, modes de paiement) : ajouter « culte » ou
 renommer une catégorie demandait un déploiement. Le socle les rend **propres à
