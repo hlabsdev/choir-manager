@@ -46,9 +46,14 @@ pupitre », organigramme en bandes, diagnostic PDF `manage.py verifier_pdf`,
 origines CSRF de développement + normalisation `Origin: null` (DEBUG
 uniquement), nommage « Chœur » harmonisé, et **canal WhatsApp transactionnel
 via WAHA** (opt-in par membre, service idempotent, throttle par tenant,
-service Compose + `make waha-init`). Validation de la branche : **632 tests
-backend** (6 ignorés sous SQLite, **638 sous PostgreSQL**) et **199 tests
-frontend**, build de production vert.
+service Compose + `make waha-init`). Validation de la branche : **642 tests
+backend** (6 ignorés sous SQLite) et **211 tests frontend**, build de
+production vert.
+
+**`feat/planning-notifs-analytics` — étape 2 (branche courte, non déployée)** :
+module `planning` (événements, RSVP, calendrier unifié, rappels), analytique
+de présence, écrans `/planning` et `/statistiques`. Voir la section
+« Planning & assiduité » ci-dessous. La production reste sur `v1.7.0`.
 
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
@@ -434,8 +439,8 @@ mandats.
 ### RBAC : le pivot est `Mandat`, jamais un rôle fixe
 
 Apps : `core`, `authentication`, `membres`, `musique`, `presences`, `finances`,
-`communications` (annonces), `rapports`, `notifications`. Routes montées sous
-`/api/<app>/` dans `chm_config/urls.py`.
+`communications` (annonces), `planning`, `rapports`, `notifications`. Routes
+montées sous `/api/<app>/` dans `chm_config/urls.py`.
 
 - Un `Membre` porte des `Mandat`s liés à des `Poste`s (M2M vers `Group` Django).
 - `Poste.unique_actif=True` : un seul mandat actif à la fois sur ce poste —
@@ -735,6 +740,53 @@ volume de session vide. Procédure complète — numéro dédié, scan, vérific
 `WORKING`, sauvegarde du volume, remèdes — dans
 [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
+### Planning & assiduité — le calendrier unifié
+
+Le module `planning` ne duplique PAS `presences.Repetition` : la répétition
+porte le pointage, ses permissions et ses chants travaillés, et elle reste la
+seule source de vérité pour tout cela. `planning.Evenement` couvre le reste de
+la vie de la chorale (concert, réunion, audition, sortie), et l'endpoint
+`GET /api/planning/evenements/calendrier/` **fusionne** les deux flux pour que
+le front n'ait qu'un appel à faire. Les identifiants du calendrier sont
+préfixés (`repetition-12`, `evenement-7`) et portent `source_id` : un front ne
+peut pas confondre les deux natures.
+
+**RSVP.** `ReponseEvenement` (chorale + événement + membre, contrainte
+d'unicité) porte `present` / `absent` / `peut_etre` / `en_attente`. Chaque
+membre répond pour lui-même via `POST …/repondre/`, sans rôle particulier ;
+la liste nominative (`…/reponses/`) est staff. `Evenement` est en suppression
+logique : supprimer un concert ne doit pas emporter les réponses (même
+contrepartie que les autres parents — les lectures filtrent
+`evenement__is_deleted=False`).
+
+**Notifications.** La création d'un événement notifie en in-app tous les
+membres actifs/stagiaires sauf l'auteur (`notifier_groupe`). La commande
+`manage.py rappeler_evenements --jours 1` envoie un rappel in-app + email
+**une fois par jour** (`Evenement.dernier_rappel_le`) ; elle est idempotente et
+planifiable en cron. Pas de WhatsApp pour ces rappels : ils partent à toute la
+chorale, donc c'est un envoi de masse — le canal WhatsApp reste transactionnel.
+
+**Analytique.** `GET /api/presences/analytique/` (bureau / maître de chœur)
+agrège le pointage existant : totaux, taux `(présents + retards) / total`,
+par pupitre, par membre, série par date, et signal « à relancer » à partir de
+3 pointages sous 60 %. Aucune nouvelle saisie — l'écran `/statistiques` ne fait
+que lire. Les répétitions supprimées sont exclues, comme partout.
+
+**Front.** `/planning` (grille mensuelle sur desktop, agenda sous 640 px,
+liste à venir, création staff, RSVP) et `/statistiques` (KPI, pupitres, série,
+membres, filtre pupitre et export CSV). Le lien « Assiduité » est aussi exposé
+depuis `/rapports` pour les rôles autorisés. Le calendrier utilise les classes
+`.planning-*` et l'analytique `.analytics-*` de `styles.css`, dans la même
+palette « Papier & scène » — pas de second système de design.
+
+**Modales.** `.route-enter` ne doit PAS conserver un `animation-fill-mode`
+(`both`) : l'opacité finale maintient un contexte d'empilement et les modales
+passent sous la barre supérieure / la barre mobile. Le conteneur
+`.modal-overlay` est en `align-items:flex-start` avec `margin:auto` sur le
+panneau, et les panneaux sans scroll interne reçoivent un `max-height` +
+`overflow-y:auto` — sinon un formulaire plus haut que le viewport est centré
+au-delà du haut de l'écran.
+
 ### Boîte à suggestions
 
 `core.Suggestion` — même famille que `DemandeChorale` : modèle de plateforme
@@ -964,10 +1016,11 @@ pas ailleurs.
 | ~~11~~ | ~~**Import Excel — frontend et livraison**~~ | **Livré dans v1.7.0** — écran Bureau avec gabarit, aperçu, confirmation revalidée et restitution ponctuelle des mots de passe temporaires. |
 | 12 | **Self-service du profil — publication** | Publié sur `main` et préparé pour `v1.8.0` : nom, prénom, téléphone, photo et partage de contact. Tag et déploiement restent à effectuer ; la production reste sur `v1.7.0`. |
 | ~~13~~ | ~~**Canal WhatsApp (WAHA)**~~ | **Livré sur `feat/v2-refonte`, non déployé** — `NotificationWhatsApp`, opt-in `Membre.whatsapp_optin` (endpoint dédié), `envoyer_whatsapp()` idempotent et throttlé, intégration `notifier(..., par_whatsapp=True)`, admin en lecture seule, service Compose WAHA + `make waha-init`, procédure dans `docs/DEPLOIEMENT.md`. Limite assumée : pas de file Redis/worker (Mode B), `notifier_groupe()` reste in-app. |
+| ~~14~~ | ~~**Planning & assiduité**~~ | **Livré sur `feat/planning-notifs-analytics`, non déployé** — app `planning` (Evenement, ReponseEvenement), calendrier unifié répétitions/événements, RSVP, rappels in-app + email, `/api/presences/analytique/`, écrans `/planning` et `/statistiques`. Restent : export iCal, push web et rappels WhatsApp ciblés. |
 
 Backlog de fond, à prioriser depuis les retours d'usage uniquement : PWA et
-partitions hors ligne, calendrier externe, notifications push/SMS, module
-Activités/Planning, application native.
+partitions hors ligne, calendrier externe (export iCal), notifications
+push/SMS, finalisation du module Planning (rappels push), application native.
 
 ## Pour aller plus loin
 

@@ -143,3 +143,44 @@ Tailwind utilitaires), pas de bibliothèque UI supplémentaire, pas de
 dégradés violets, pas d'emojis, pas de spinner plein écran, pas de
 `!important` en série, pas de renommage de classes déjà utilisées par les
 tests sans vérifier les specs.
+
+## 8. Extension « Planning & assiduité » (branche étape 2)
+
+Deux écrans ajoutés sans second système de design : mêmes polices, même
+palette, mêmes composants de coquille. Le calendrier réutilise la grille
+papier et les couleurs de nature (vert = répétition, corail = concert, bleu =
+réunion, ocre = audition). L'analytique emploie les mêmes cartes et badges,
+avec des barres de taux et une série de pointages — pas de bibliothèque de
+graphiques.
+
+![Planning](captures/planning-v2.png)
+
+![Assiduité](captures/assiduite-v2.png)
+
+Principes tenus : navigation identique (Planning dans « Vie de la chorale »,
+Assiduité dans « Administration » pour bureau/MDC), aucune route ni
+`data-testid` renommés, états chargement/vide/erreur explicites, et actions
+RSVP accessibles au clavier dans une modale.
+
+## 9. Recette mobile et modales (étape 2)
+
+Les correctifs de recette ont porté sur des défauts transverses, pas seulement
+sur Planning :
+
+- les modales sont rendues au-dessus de la coquille : `.route-enter` ne
+  conserve plus de contexte d'empilement après son animation, et un panneau
+  plus haut que le viewport reste atteignable par le haut ;
+- les icônes de recherche ne sont plus positionnées en double (le SVG héritait
+  du `absolute` du composant `lucide-icon`) ; le retrait des champs avec icône
+  vit dans `.input--icon-left` ;
+- sous 640 px, le calendrier Planning devient un agenda lisible plutôt qu'une
+  grille de sept colonnes ; les KPI d'assiduité passent en deux colonnes ;
+- les filtres du répertoire s'empilent en pleine largeur sur mobile ;
+- l'analytique expose un filtre par pupitre et un export CSV (BOM UTF-8,
+  séparateur `;`), et `/rapports` renvoie vers elle pour les rôles autorisés.
+
+Captures : [mobile-planning.png](captures/mobile-planning.png),
+[mobile-planning-agenda.png](captures/mobile-planning-agenda.png),
+[mobile-assiduite.png](captures/mobile-assiduite.png),
+[modal-planning-mobile.png](captures/modal-planning-mobile.png),
+[modal-musique-mobile.png](captures/modal-musique-mobile.png).

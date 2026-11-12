@@ -81,7 +81,8 @@ travail à venir et les chantiers connus sont centralisés dans
 | Membres | Opérationnel | Liste, recherche, filtres, création, fiche, édition et soft-delete |
 | Structure | Opérationnel | Pupitres, postes, mandats, groupes et organigramme |
 | Onboarding | Opérationnel | Demande de chorale modérée, provisionnement opérateur, invitation choriste |
-| Présences | Opérationnel | Répétitions, pointage mobile, permissions d'absence et validations |
+| Présences | Opérationnel | Répétitions, pointage mobile, permissions d'absence, validations et tableau de bord d'assiduité |
+| Planning | Opérationnel | Calendrier unifié répétitions/concerts, RSVP, rappels in-app + email |
 | Répertoire | Opérationnel | Chants, thèmes, médias (partitions, audio par pupitre/tutti/accompagnement) et suivi des chants travaillés |
 | Finances | Opérationnel | Journal de caisse, catégories, tarifs, campagnes, cotisations et paiements |
 | Communications | Opérationnel | Annonces et pièces jointes |
@@ -405,7 +406,7 @@ pytest -q
 python manage.py check
 ```
 
-La suite contient ~638 tests couvrant notamment l'authentification, l'isolation
+La suite contient ~642 tests couvrant notamment l'authentification, l'isolation
 inter-chorales, le RBAC, l'onboarding, les invitations, les membres, les
 présences, la musique (dont les médias du répertoire), les finances, les
 annonces, les notifications, les rapports et la suspension d'une chorale.
