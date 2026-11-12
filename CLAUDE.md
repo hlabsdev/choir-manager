@@ -55,6 +55,18 @@ module `planning` (événements, RSVP, calendrier unifié, rappels), analytique
 de présence, écrans `/planning` et `/statistiques`. Voir la section
 « Planning & assiduité » ci-dessous. La production reste sur `v1.7.0`.
 
+**`v2.1.0` « Chœur 2.1 » — taguée sur `main`** : planning, RSVP et assiduité
+fusionnés (superprojet + sous-modules aux pointeurs figés).
+
+**`feat/admin-theme-v2` — alignement de l'admin et correctifs (branche courte,
+non déployée)** : thème de l'admin Django aligné sur « Papier & scène » (vert
+pin/corail, Fraunces + Inter auto-hébergées sous la CSP `font-src 'self'`),
+`GET /` du backend redirige vers `/admin/` au lieu d'une 404 nue, et
+suppression d'une chorale peuplée réparée (`Mandat` porté par la chorale,
+`PROTECT` → `RESTRICT` là où la cascade emporte la référence). La production
+est servie depuis `/root/choir-manager/` (cf. docs/DEPLOIEMENT.md). À fusionner
+avec la session frontend avant le prochain tag.
+
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
 self-service, `must_change_password`, changement volontaire d'email, et les
@@ -225,6 +237,17 @@ déjà le bon geste (`terminer()`, un mandat clos EST l'archive), et surtout
 corbeille sans être clôturé continuerait d'accorder ses permissions. Mieux vaut
 ne pas ouvrir cette porte que devoir la refermer.
 
+⚠️ **Mais un mandat part avec sa chorale.** `Mandat` est désormais un
+`ChoraleOwnedModel` : sa FK `chorale` est dérivée du membre dans `save()`, et
+la cascade `Chorale` l'emporte. Sans cette FK, ses relations `membre`/`poste`
+en `RESTRICT` rendaient la suppression d'une chorale peuplée impossible (et le
+pré-contrôle de l'admin refusait même d'afficher l'écran de confirmation) —
+défaut constaté en production sur une chorale de test. Les `PROTECT` entre
+modèles d'un même tenant (auteur d'annonce, déposant de média, catégorie de
+mouvement) sont devenus des `RESTRICT` pour la même raison : ils protègent
+toujours contre une suppression DIRECTE, mais laissent passer une cascade qui
+emporte aussi la référence.
+
 Le reste demeure en suppression physique, délibérément : `Pupitre`, `Poste`,
 `Theme`, `CategorieMouvement` sont des vocabulaires de configuration recréables
 en quelques secondes, `SeanceChant`/`TarifCotisation` des lignes de liaison,
@@ -330,9 +353,16 @@ INSTALLED_APPS et le chargeur APP_DIRS le choisirait ; et le thème sombre de
 l'admin reste fonctionnel parce que le CSS reprend le triptyque de sélecteurs
 de Django (`html[data-theme="light"], :root` / `@media prefers-color-scheme` /
 `html[data-theme="dark"]`) — mettre une couleur en dur dans une règle
-structurelle le casserait sans que rien ne le signale. Les valeurs sont
-recopiées **à la main** du système de design du front : les deux fichiers ne
-partagent aucun build.
+structurelle le casserait sans que rien ne le signale. **Aligné sur la v2
+« Papier & scène »** : vert pin / corail / ivoire-encre, Fraunces + Inter
+auto-hébergées dans `core/static/chm_admin/fonts/` (mêmes `.woff2` que le
+front, `@font-face` locaux) — Google Fonts est interdit par la CSP
+`font-src 'self'`. Les valeurs restent recopiées **à la main** du système de
+design du front : les deux fichiers ne partagent aucun build.
+
+**Page d'accueil du backend.** `GET /` (hors `/admin/` et `/api/`) redirige en
+302 vers `/admin/` : le backend n'a pas de surface publique, et la 404 nue
+n'avait aucun sens. Déclaré en tête de `chm_config/urls.py`.
 
 ### Journal d'audit (app `audit`) — chantier n°8, livré
 
