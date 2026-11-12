@@ -248,6 +248,14 @@ mouvement) sont devenus des `RESTRICT` pour la même raison : ils protègent
 toujours contre une suppression DIRECTE, mais laissent passer une cascade qui
 emporte aussi la référence.
 
+**Cloisonnement.** Un mandat ne relie QUE des objets de sa chorale :
+`MandatSerializer` borne `membre`/`poste` au tenant actif et valide
+`membre.chorale == poste.chorale` ; `roles_de_membre()` exige en plus que le
+POSTE et le MANDAT soient dans la chorale du membre. Sans ces gardes, un
+bureau pouvait rattacher un poste d'une autre chorale et s'en voir accorder le
+rôle — fuite cross-tenant verrouillée par
+`membres/tests/test_mandat_cloisonnement.py`.
+
 Le reste demeure en suppression physique, délibérément : `Pupitre`, `Poste`,
 `Theme`, `CategorieMouvement` sont des vocabulaires de configuration recréables
 en quelques secondes, `SeanceChant`/`TarifCotisation` des lignes de liaison,
