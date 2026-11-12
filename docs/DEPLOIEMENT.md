@@ -4,6 +4,10 @@ Pile Docker Compose : PostgreSQL, migrations, API Django, frontend Angular
 servi par Nginx. Ce document couvre le démarrage, l'exploitation courante, la
 sauvegarde, la restauration et le rollback.
 
+> Répertoire du dépôt en production : **`/root/choir-manager`**. Les chemins
+> `/srv/chm/...` désignent uniquement le **volume médias** (`/srv/chm/media`),
+> jamais le dépôt ; vérifier le volume réel avant toute migration.
+>
 > Base de référence : **PostgreSQL 17**. SQLite n'est plus qu'un repli de poste
 > de développement, explicitement conditionné à `DJANGO_DEBUG=True`.
 
@@ -625,7 +629,8 @@ Fréquence recommandée : **une fois par jour**, en fin de matinée (pour que le
 rappel de demain arrive avant la fin de journée). Entrée cron type :
 
 ```cron
-0 11 * * * cd /srv/chm/choir-manager && make prod-rappels >> /var/log/chm-rappels.log 2>&1
+# Le dépôt de production vit dans /root/choir-manager (PAS /srv/chm/choir-manager).
+0 11 * * * cd /root/choir-manager && make prod-rappels >> /var/log/chm-rappels.log 2>&1
 ```
 
 Le canal WhatsApp n'est **pas** utilisé pour ces rappels : ils partent à toute
