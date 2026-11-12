@@ -180,6 +180,7 @@ sur Planning :
   séparateur `;`), et `/rapports` renvoie vers elle pour les rôles autorisés.
 
 Captures : [mobile-planning.png](captures/mobile-planning.png),
+[mobile-planning-agenda.png](captures/mobile-planning-agenda.png),
 [mobile-assiduite.png](captures/mobile-assiduite.png),
 [modal-planning-mobile.png](captures/modal-planning-mobile.png),
 [modal-musique-mobile.png](captures/modal-musique-mobile.png).
