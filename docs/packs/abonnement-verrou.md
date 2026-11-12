@@ -55,6 +55,24 @@ Les codes sont à rapprocher des modules réels en phase 1 de A2.
   Il ne prend JAMAIS un rôle de bureau : aucun mandat, aucun héritage des
   permissions du tenant. Chaque ouverture et chaque écriture est tracée
   dans l'audit avec motif obligatoire.
+- **Pas de masquage des données sensibles** (amendement humain) : le mode
+  assisté lit tout — finances, motifs d'absence, notes internes,
+  téléphone/email compris. La protection est la session tracée, pas le
+  masquage.
+- **Domaines en lecture seule, pas exclus** (amendement humain) : finances,
+  pointage, mandats, suppressions et rôles ne sont pas retirés du périmètre
+  de lecture ; ils sont simplement non modifiables. Les SEULES écritures
+  autorisées restent la whitelist : renvoyer une invitation, corriger
+  email/téléphone d'un membre (avec avant/après).
+- **Télémétrie à compléter** : ajouter `planning` et `notifications` à
+  `APPS_AUDITEES`, journaliser les exports de rapports et les
+  téléchargements de médias, et brancher `evenements-client` côté front
+  (aujourd'hui l'endpoint existe mais n'est appelé nulle part).
+- **Dump de production** : `/root/choir-manager/backups/` (dumps `-Fc` du
+  script `prod-deploie` et sauvegardes automatiques).
+- **Fermeture de l'accès global implicite** : les ViewSets métier ne sont
+  plus ouverts d'office à l'opérateur ; il conserve l'admin Django, les
+  dashboards en lecture et les sessions assistées.
 - La règle du `CLAUDE.md` (« l'opérateur n'a aucun droit métier ») est
   amendée en conséquence, pas contournée : le mode assisté est une surface
   explicite et auditée, pas une extension des mandats.
