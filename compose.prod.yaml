@@ -14,6 +14,9 @@ services:
       - chm
       - mrs-gateway
     volumes:
+      # ⚠️ /srv/chm/media est le VOLUME MÉDIAS, pas le dépôt. Le dépôt de
+      # production vit dans /root/choir-manager. Vérifier le chemin réel du
+      # volume avant toute migration de données.
       - /srv/chm/media:/usr/share/nginx/media:ro
 
   backend:
@@ -41,6 +44,7 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
+      # Même remarque : volume médias, distinct du dossier du dépôt.
       - /srv/chm/media:/app/media
 
 networks:

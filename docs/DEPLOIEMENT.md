@@ -4,6 +4,10 @@ Pile Docker Compose : PostgreSQL, migrations, API Django, frontend Angular
 servi par Nginx. Ce document couvre le démarrage, l'exploitation courante, la
 sauvegarde, la restauration et le rollback.
 
+> Répertoire du dépôt en production : **`/root/choir-manager`**. Les chemins
+> `/srv/chm/...` désignent uniquement le **volume médias** (`/srv/chm/media`),
+> jamais le dépôt ; vérifier le volume réel avant toute migration.
+>
 > Base de référence : **PostgreSQL 17**. SQLite n'est plus qu'un repli de poste
 > de développement, explicitement conditionné à `DJANGO_DEBUG=True`.
 
@@ -577,6 +581,38 @@ Trois causes réelles, dans l'ordre de probabilité :
 Après un scan réussi, `waha_init` doit afficher `WORKING`, et
 `NotificationWhatsApp.statut` doit passer à `envoye`.
 
+### SMS WassaSMS — canal payant, fermé par défaut
+
+Le canal est utilisé uniquement par les séries/occurrences marquées
+`notifier_sms=True`. Il n'envoie jamais de SMS pour une annonce générale.
+
+Variables `.env` / `env.prod` :
+
+```dotenv
+SMS_ENABLED=True
+SMS_API_URL=http://www.wassasms.com/wassasms/api/web/v3/sends
+SMS_API_KEY=<clé_WassaSMS>
+SMS_SENDER=Choeur          # 11 caractères max, sans caractère spécial
+SMS_MAX_PER_MINUTE=20
+```
+
+`SMS_ENABLED=False` (défaut) désactive complètement le canal, même si une
+série porte `notifier_sms=True`. La clé ne doit jamais être committée,
+affichée dans les logs ou recopiée dans un ticket.
+
+Contrôle après déploiement :
+
+```bash
+make prod-shell
+# dans le shell Django :
+from notifications.models import NotificationSMS
+NotificationSMS.objects.order_by("-created_at")[:5]
+```
+
+Un SMS réel n'est **pas** envoyé pendant le déploiement. Pour le tester,
+créer un événement de test avec « Envoyer aussi un SMS », puis vérifier
+`NotificationSMS` (statut `envoye`/`echec`) et la consommation WassaSMS.
+
 ### Rappels d'événements — À PLANIFIER
 
 Le module Planning envoie un rappel in-app + email aux membres actifs des
@@ -593,6 +629,7 @@ Fréquence recommandée : **une fois par jour**, en fin de matinée (pour que le
 rappel de demain arrive avant la fin de journée). Entrée cron type :
 
 ```cron
+# Le dépôt de production vit dans /root/choir-manager (PAS /srv/chm/choir-manager).
 0 11 * * * cd /root/choir-manager && make prod-rappels >> /var/log/chm-rappels.log 2>&1
 ```
 
