@@ -46,7 +46,7 @@ pupitre », organigramme en bandes, diagnostic PDF `manage.py verifier_pdf`,
 origines CSRF de développement + normalisation `Origin: null` (DEBUG
 uniquement), nommage « Chœur » harmonisé, et **canal WhatsApp transactionnel
 via WAHA** (opt-in par membre, service idempotent, throttle par tenant,
-service Compose + `make waha-init`). Validation de la branche : **651 tests
+service Compose + `make waha-init`). Validation de la branche : **652 tests
 backend** (6 ignorés sous SQLite) et **212 tests frontend**, build de
 production vert.
 
@@ -764,7 +764,9 @@ contrepartie que les autres parents — les lectures filtrent
 `presences.Repetition` (pointage inchangé) ou `planning.Evenement` (RSVP
 inchangé), avec une FK `serie`. `planning/services.py::materialiser_serie()`
 génère les dates (quotidien / hebdomadaire avec jours ISO 1–7 / mensuel) entre
-`date_debut` et `date_fin`, plafonnées à 200. Une occurrence éditée
+`date_debut` et `date_fin`, plafonnées à 200. En mensuel, `semaine_mois`
+(1–5, 5 = dernier) sélectionne la n-ième occurrence du jour choisi — c'est ce
+qui permet « dernier vendredi de chaque mois » sans bidouille manuelle. Une occurrence éditée
 (`modifie_manuellement`) ou annulée (`annule_manuellement`) n'est jamais
 écrasée ni ressuscitée. `regenerer` remplace les occurrences futures sans
 pointage/réponse ; `arreter` archive la série et supprime logiquement le futur.

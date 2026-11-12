@@ -201,3 +201,10 @@ pour les annonces générales.
 Captures : [planning-recurrence-form.png](captures/planning-recurrence-form.png),
 [planning-series-modal.png](captures/planning-series-modal.png),
 [mobile-planning-recurrence-form.png](captures/mobile-planning-recurrence-form.png).
+
+### Récurrence mensuelle par occurrence
+
+Le formulaire mensuel propose maintenant **Jour de la semaine** + **Occurrence**
+(`1er`, `2e`, `3e`, `4e`, `Dernier`) en plus du mode « même jour du mois ».
+Cela couvre directement « dernier vendredi de chaque mois », sans créer une
+occurrence au dernier jour puis la déplacer à la main.
