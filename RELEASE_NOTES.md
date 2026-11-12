@@ -1,5 +1,26 @@
 # Notes de version — ChoirManager
 
+## `v2.3.0` — cartes du répertoire et aperçu de partition
+
+Date : 12 novembre 2026
+
+Les cartes du répertoire lisent désormais les mêmes données que la fiche du
+chant : dernier statut d'apprentissage réel et compteurs séparés des
+partitions et audios actifs issus de `MediaChant`. Elles ne retombent plus
+silencieusement sur « À travailler » quand le statut est absent, ne comptent
+plus l'ancien modèle `Partition`, et ignorent les médias ou répétitions placés
+à la corbeille.
+
+L'aperçu PDF intégré est de nouveau autorisé par la CSP avec la directive
+ciblée `frame-src 'self' blob:`. Le reste de la politique demeure inchangé :
+les objets embarqués restent interdits et les pages ne peuvent toujours pas
+être intégrées par un site tiers (`frame-ancestors 'none'`).
+
+Validation : **664 tests backend réussis (6 ignorés)**, **214 tests frontend
+réussis**, build Angular de production vert.
+
+---
+
 ## `v2.0.1` — correctifs de recette
 
 Date : 11 novembre 2026
