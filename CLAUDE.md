@@ -19,14 +19,24 @@ ChoirManager (CHM) — SaaS multi-tenant de gestion de chorales : membres,
 répertoire musical, présences/pointage, finances, annonces, notifications et
 rapports. API Django REST + frontend Angular 21.
 
-**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v1.7.0`, sur
-https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
+**État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v2.4.0` (déployé le
+12/11), sur https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
-passent respectivement 664 tests (6 ignorés) et 214 tests, **suite complète
+passent respectivement 677 tests (6 ignorés) et 217 tests, **suite complète
 verte**. Le self-service du profil est publié sur `main`.
 
-**`v2.3.0` — cartes du répertoire et aperçu PDF, taguée sur `main`, non
-déployée** : les résumés de chant exposent le dernier statut réel et les
+**`v2.4.0` — listes de sélection par tenant, taguée sur `main`, déployée le
+12/11** : socle `core.Liste`/`core.ValeurListe`, API scopée tenant, écran
+`/structure/listes`, seed idempotent des valeurs historiques ; pilote sur les
+types de rendez-vous et les catégories de pupitre (`Pupitre.actif`), styles de
+chant, types de campagne et modes de paiement validés contre les listes du
+tenant (`PaiementCotisation.mode_paiement`, migration `finances/0007`) ;
+correctif de la liste des paiements (500 `FieldError`). Voir
+[docs/LISTES_SELECTION.md](docs/LISTES_SELECTION.md) et « Listes de sélection
+par tenant » ci-dessous. Validation : **677 tests backend** (6 ignorés),
+**217 tests frontend**, et test fonctionnel local sur la pile complète.
+
+**`v2.3.0` — cartes du répertoire et aperçu PDF, incluse dans `v2.4.0`** : les résumés de chant exposent le dernier statut réel et les
 compteurs `MediaChant` partition/audio (hors corbeille), et la CSP autorise
 l'iframe `blob:` strictement nécessaire à l'aperçu de partition via
 `frame-src 'self' blob:`. Validation : 664 tests backend (6 ignorés), 214 tests
@@ -78,8 +88,8 @@ avec la session frontend avant le prochain tag.
 planning récurrent + SMS, types culte/veillée et correctif de cloisonnement des
 mandats. Tag annoté sur `main`, sous-modules figés.
 
-**`feat/listes-tenant` — listes de sélection par tenant (branche courte, non
-déployée)** : socle `core.Liste`/`core.ValeurListe`, API scopée tenant, écran
+**`feat/listes-tenant` — listes de sélection par tenant (fusionnée dans
+`v2.4.0`)** : socle `core.Liste`/`core.ValeurListe`, API scopée tenant, écran
 `/structure/listes`, seed idempotent des valeurs historiques, pilote sur les
 types de rendez-vous et les catégories de pupitre (`Pupitre.actif` ajouté).
 Voir « Listes de sélection par tenant » ci-dessous.

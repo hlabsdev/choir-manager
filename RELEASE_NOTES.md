@@ -1,5 +1,33 @@
 # Notes de version — ChoirManager
 
+## `v2.4.0` — listes de sélection par tenant
+
+Date : 12 novembre 2026
+
+Les choix qui relèvent de la vie de chaque chorale ne demandent plus un
+déploiement : types de rendez-vous, catégories de pupitre, styles de chant,
+types de campagne et modes de paiement sont désormais des listes propres au
+tenant, semées avec les valeurs historiques et éditables depuis
+« Structure → Listes & configuration ».
+
+- socle `core.Liste` / `core.ValeurListe`, API scopée tenant, seed idempotent
+  (migration `core/0010`) et commande `seed_listes` ;
+- pilote : types d'événement (y compris les séries) et catégories de pupitre,
+  avec `Pupitre.actif` ; badges et chips du planning reprennent les couleurs
+  de la liste ;
+- styles de chant, types de campagne et modes de paiement validés contre les
+  listes du tenant ; `PaiementCotisation.mode_paiement` (migration
+  `finances/0007`) n'est plus recopié dans `notes` ;
+- correctif : la liste des paiements (`GET /api/finances/paiements/`) renvoyait
+  une 500 `FieldError` — elle filtre désormais la chorale via
+  `cotisation__chorale`, avec un test de non-régression.
+
+Validation : **677 tests backend réussis (6 ignorés)**, **217 tests frontend
+réussis**, build Angular de production vert. Validé en local sur la pile
+complète (PostgreSQL, API de bout en bout, front servi) avant release.
+
+---
+
 ## `v2.3.0` — cartes du répertoire et aperçu de partition
 
 Date : 12 novembre 2026
