@@ -503,8 +503,12 @@ la chorale**, sans transformer les choix métier fermés en listes libres.
   métadonnées (libellé, couleur, ordre, actif), mais aucune migration de
   données lourde et aucune rupture du contrat d'API. Renommer un libellé ne
   touche pas l'historique ; un `code` est immuable après création.
-- **A3/A5/A7/A8** (catégories de pupitre, styles, types de campagne, modes de
-  paiement) sont des listes tenant **semées avec les valeurs actuelles**.
+- **A3/A5/A7/A8** (catégories de pupitre, styles de chant, types de campagne,
+  modes de paiement) sont des listes tenant **semées avec les valeurs
+  actuelles**, et leurs champs métier sont **validés contre la liste active** :
+  `Pupitre.categorie`, `Chant.style`, `CampagneCotisation.type_campagne` et
+  `PaiementCotisation.mode_paiement` (champ dédié, migration `finances/0007`
+  — le mode n'est plus recopié dans `notes`).
 - **`StatutApprentissage`, `Poste.TypePoste`, `Portee` média restent fermés** :
   ils portent une sémantique de calcul/affichage stable, et les ouvrir
   n'apporterait qu'un risque de divergence sans demande terrain.
