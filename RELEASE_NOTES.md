@@ -1,5 +1,59 @@
 # Notes de version — ChoirManager
 
+## `v2.5.0` — abonnement par chorale et console opérateur
+
+Date : 12 novembre 2026
+
+### Abonnement et verrou serveur
+
+- **Un abonnement par chorale** (relation 1:1), avec un historique append-only
+  des transitions. Un service unique écrit `plan`/`statut` ; toute écriture
+  directe est refusée à l'exécution et détectée par un test structurel.
+- Plans `libre`, `pro`, `pionnier`. Toutes les chorales existantes passent en
+  `pionnier` jusqu'au **31/12/2026**, puis `libre` ; le délai de grâce de
+  15 jours s'applique avant la `lecture_seule`. `Chorale.is_active=False`
+  (suspension) prime sur l'abonnement.
+- **Registre de fonctionnalités à défaut fermé** : SMS, WhatsApp, audio,
+  rappels programmés, exports et **toute la finance** (y compris le rapport
+  financier JSON) sont payants. En `libre`, lecture et écriture sont refusées ;
+  en `lecture_seule`, seule l'écriture tombe.
+- Refus `403 fonctionnalite_non_incluse`, distinct de `role_insuffisant` et
+  `sans_tenant_actif`. Les tâches planifiées sautent proprement et journalisent.
+- Écran « Mon abonnement » en lecture seule pour le Bureau, cadenas de menu,
+  gestion du plan par l'opérateur.
+
+### Console opérateur
+
+- **Tableaux de bord globaux** : KPI, séries temporelles, vue par chorale et
+  par utilisateur, effets (notifications, SMS, WhatsApp). Télémétrie complétée
+  (`planning`, `notifications`, exports, téléchargements de médias).
+- **Mode assisté tracé** : session serveur dédiée (réauthentification,
+  60 min absolues / 15 min d'inactivité), console de lecture complète, aucune
+  prise de rôle de bureau, aucun JWT réémis.
+- **Actions de correction** : renvoyer une invitation, corriger email/téléphone,
+  corriger les montants (mouvement, cotisation, paiement), créer/clôturer un
+  mandat, modifier un poste et ses groupes. Motif obligatoire, avant/après
+  structuré, une seule ligne d'audit par action.
+- Fermeture de l'accès global implicite de l'opérateur aux ViewSets métier.
+
+### Navigation
+
+- Rail à **4 groupes** et hub `/administration` ; barre d'onglets et fil
+  d'Ariane sur les six écrans de gestion ; feuille mobile raccourcie. Les URL
+  existantes et les gardes sont inchangées.
+
+### Validation
+
+- **912 tests backend PostgreSQL** (dont concurrence des transitions et des
+  corrections), **266 tests frontend**, build de production vert.
+- Migration exercée sur une **copie du dump de production** : 11 chorales →
+  11 abonnements, tous `pionnier`/`actif` au 31/12/2026, migration inverse puis
+  ré-application vérifiées.
+- Test fonctionnel local de bout en bout : ajout de valeurs, événement, verrou
+  finance, paiement, session assistée et actions.
+
+---
+
 ## `v2.4.0` — listes de sélection par tenant
 
 Date : 12 novembre 2026
