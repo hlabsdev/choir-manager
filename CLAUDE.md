@@ -67,6 +67,16 @@ suppression d'une chorale peuplée réparée (`Mandat` porté par la chorale,
 est servie depuis `/root/choir-manager/` (cf. docs/DEPLOIEMENT.md). À fusionner
 avec la session frontend avant le prochain tag.
 
+**`v2.2.0` — déployée en production le 12/11** : admin « Papier & scène »,
+planning récurrent + SMS, types culte/veillée et correctif de cloisonnement des
+mandats. Tag annoté sur `main`, sous-modules figés.
+
+**`feat/listes-tenant` — listes de sélection par tenant (branche courte, non
+déployée)** : socle `core.Liste`/`core.ValeurListe`, API scopée tenant, écran
+`/structure/listes`, seed idempotent des valeurs historiques, pilote sur les
+types de rendez-vous et les catégories de pupitre (`Pupitre.actif` ajouté).
+Voir « Listes de sélection par tenant » ci-dessous.
+
 `v1.6.0` avait clos le lot email (unicité insensible à la casse + vérification
 à usage unique) ; `v1.7.0` ajoute l'autonomie du compte (reset
 self-service, `must_change_password`, changement volontaire d'email, et les
@@ -473,6 +483,58 @@ Deux natures d'accès, deux mécanismes : `roleGuard` (mandats) n'accorde aucune
 dérogation à l'opérateur, et les routes opérateur passent par `operateurGuard`.
 Même séparation que côté serveur entre `est_operateur` et la résolution par
 mandats.
+
+### Listes de sélection par tenant (`core.Liste` / `core.ValeurListe`)
+
+Certains choix étaient figés dans le code (types de rendez-vous, catégories de
+pupitre, styles, types de campagne, modes de paiement) : ajouter « culte » ou
+renommer une catégorie demandait un déploiement. Le socle les rend **propres à
+la chorale**, sans transformer les choix métier fermés en listes libres.
+
+**Décisions structurantes (production : dix chorales réelles avec données).**
+- **On ne remplace PAS** les modèles de configuration déjà robustes
+  (`Pupitre`, `Poste`, `CategorieMouvement`, `Theme`, `Campagne`,
+  `TarifCotisation`) : ils portent des FK et des règles, et les migrer vers un
+  socle générique serait une migration à haut risque sans gain. Le socle
+  générique sert aux champs **code** (CharField), l'écran de gestion unifie
+  l'édition.
+- **Le champ métier garde son code stable** (`Evenement.type_evenement` reste
+  un `CharField`) : la liste est la source de vérité des choix et des
+  métadonnées (libellé, couleur, ordre, actif), mais aucune migration de
+  données lourde et aucune rupture du contrat d'API. Renommer un libellé ne
+  touche pas l'historique ; un `code` est immuable après création.
+- **A3/A5/A7/A8** (catégories de pupitre, styles, types de campagne, modes de
+  paiement) sont des listes tenant **semées avec les valeurs actuelles**.
+- **`StatutApprentissage`, `Poste.TypePoste`, `Portee` média restent fermés** :
+  ils portent une sémantique de calcul/affichage stable, et les ouvrir
+  n'apporterait qu'un risque de divergence sans demande terrain.
+
+**Modèle.** `Liste(chorale, code, nom, description, modifiable)` —
+`unique(chorale, code)`. `ValeurListe(liste, code, libelle, ordre, actif,
+par_defaut, couleur, icone, parent)` — `unique(liste, code)`. Une seule valeur
+par défaut par liste (appliquer un défaut retire l'ancien). On **désactive**
+(`actif=False`), on ne supprime pas une valeur référencée : l'API répond 409
+(`core/listes.py::usages_valeur`), et les données historiques restent lisibles.
+
+**API.** `/api/core/listes/` et `/api/core/listes-valeurs/` (DRF, scoping
+`ChoraleFilterMixin` ; `ValeurListe` via `liste__chorale`). Lecture =
+`EstMembreDuTenant`, écriture = `IsBureauOrMaitreChoeur` **dans un tenant
+actif** (l'opérateur passe par l'admin ou par `core/listes.py`). Le `code` d'une
+liste/valeur est immuable après création.
+
+**Semis.** `core/listes.py::seed_listes(chorale)` (idempotent, ne réécrit
+jamais un libellé/couleur modifié) ; appelé par `provisionner_chorale`, par la
+migration de données `core/0010_seed_listes` pour les chorales existantes, et
+par `manage.py seed_listes`. Le pilote valide `type_evenement` et
+`categorie_pupitre` contre la liste **active** du tenant, avec repli sur les
+choix historiques si la liste n'est pas semée (jamais de blocage brutal).
+
+**Front.** `shared/services/listes.service.ts` (cache par session, purgé au
+changement de tenant par `purgerEtatApplicatif`), `shared/components/select-liste/`,
+écran `/structure/listes` (bureau/MDC). Le planning utilise les valeurs et
+couleurs de la liste pour ses types, badges et chips ; la structure utilise les
+catégories et `Pupitre.actif`. Aucun second système de design : les couleurs
+alimentent les badges existants.
 
 ### RBAC : le pivot est `Mandat`, jamais un rôle fixe
 
