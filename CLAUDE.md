@@ -868,6 +868,24 @@ aucun moyen d'agir pour qui le recevait.
 Sans elles, une `DemandeChorale` ou une `Suggestion` ne se découvrait qu'en
 visitant l'admin — invisible potentiellement plus d'un jour.
 
+### Suspension d'un canal par chorale (B0)
+
+Un canal d'envoi (SMS, WhatsApp) peut être **suspendu pour une seule chorale**
+par `notifications.SuspensionCanal` : le canal reste configuré et l'abonnement
+inchangé. Ligne sans `fin` = en cours ; la contrainte partielle garantit UNE
+suspension en cours par couple (chorale, canal), et le motif est obligatoire.
+
+Ordre des gardes (§5) : drapeau d'environnement → `sans_tenant_actif` →
+`canal_desactive` → `fonctionnalite_non_incluse` ; refus HTTP 403
+`canal_desactive` (`core.exceptions.CanalDesactiveError`), et côté services
+best-effort (`envoyer_sms`/`envoyer_whatsapp`) un `False` journalisé, sans
+ligne ni appel.
+
+**Écriture** : seuls `suspendre_canal`/`reprendre_canal` (idempotence, audit,
+notification du Bureau). `manage.py canal` (`--etat` lecture seule, `--dry-run`
+sans écriture) et l'admin opérateur (actions à motif, formulaire fermé)
+orchestrent sans écrire le modèle ; `test_garde_suspension.py` le verrouille.
+
 ### Canal WhatsApp (WAHA) — opt-in, transactionnel uniquement
 
 Le canal WhatsApp est un **canal de `notifier()`** (`par_whatsapp=True`), jamais
