@@ -51,6 +51,8 @@ Date : 13 novembre 2026
 
 - **1040 tests backend PostgreSQL**, **358 tests frontend**, build vert.
 
+> **Libellé :** le plan historiquement appelé « Libre » s'affiche désormais **« Standard »** partout (le code interne `libre` reste inchangé, aucune migration de données).
+
 ---
 
 ## `v2.5.0` — abonnement par chorale et console opérateur

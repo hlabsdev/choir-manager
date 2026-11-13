@@ -25,6 +25,8 @@ rapports. API Django REST + frontend Angular 21.
 passent respectivement 1040 tests (6 ignorés) et 358 tests, **suite complète
 verte**. Le self-service du profil est publié sur `main`.
 
+**Libellé du plan :** le code technique reste `libre` (valeurs en base, API, gardes), mais **tous les libellés visibles disent « Standard »** (`get_plan_display()`, écrans opérateur, diffusion, Mon abonnement). Ne pas réintroduire « Libre » dans une interface.
+
 **`v2.6.0` — design et exports (déployée le 13/11)** : largeur de page unifiée
 (`.page-shell`), impression refaite (en-tête de document, A4, en-tête de
 tableau répété, plus aucun contrôle imprimé), exports **CSV/PDF/impression**
