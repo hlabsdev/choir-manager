@@ -941,18 +941,22 @@ volume de session vide. Procédure complète — numéro dédié, scan, vérific
 
 ### Abonnement & verrou serveur (pack C1)
 
-La grille tarifaire vit dans `abonnements.TarifPlan` (migration `0005`) : un
-tarif est un triplet `(plan, périodicité, devise)`, jamais un prix annuel figé.
-Seul `pro` s'y vend (`libre`/`pionnier` sont gratuits) ; une contrainte
-partielle n'autorise qu'UNE ligne `actif=True` par triplet, l'historique restant
-en lignes inactives. `quota_sms` est réservé au pack B.
+La grille tarifaire vit dans `abonnements.TarifPlan` (migrations `0005` puis
+`0006`) : un tarif est un triplet `(plan, périodicité, devise)`, jamais un
+prix annuel figé. Les périodicités OFFERTES sont **6 mois** (`semestriel`) et
+**1 an** (`annuel`) — décision P2, **pas de mensuel**. Seul `pro` s'y vend
+(`libre`/`pionnier` sont gratuits) ; une contrainte partielle n'autorise
+qu'UNE ligne `actif=True` par triplet, l'historique restant en lignes
+inactives. `quota_sms` est réservé au pack B.
 
 `GET /api/abonnements/tarifs/` est **public** (`AllowAny`, aucune donnée de
 tenant) et n'expose que les lignes actives ; la grille s'édite dans l'admin
 opérateur. `manage.py gerer_abonnement --chorale X --etat` lit sans écrire ;
 un changement passe par `--plan/--periodicite/--echeance` avec `--motif`
-obligatoire (`--dry-run` n'écrit rien). Les actions d'admin « Activer Pro
-12 mois » / « Repasser Standard » exigent aussi un motif.
+obligatoire (`--dry-run` n'écrit rien) — `--periodicite semestriel` calcule
+l'échéance à +6 mois, `--periodicite annuel` à +12 mois. L'admin propose
+DEUX actions Pro, « Activer Pro 6 mois » et « Activer Pro 12 mois », plus
+« Repasser Standard » ; les trois exigent un motif via la page intermédiaire.
 
 La garde de motif vit **AUSSI dans le service**
 `abonnements/services.py::changer_etat` : toute transition `source=MANUEL`
