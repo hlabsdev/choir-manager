@@ -22,10 +22,14 @@ rapports. API Django REST + frontend Angular 21.
 **État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v2.4.0` (déployé le
 12/11), sur https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
-passent respectivement 1099 tests (6 ignorés) et 392 tests, **suite complète
+passent respectivement 1099 tests (6 ignorés) et 397 tests, **suite complète
 verte**. Le self-service du profil est publié sur `main`.
 
+**Thème :** défaut **clair** (l'option « système » reste offerte dans le sélecteur ; un choix explicite est mémorisé). Ne pas réintroduire « système » comme défaut.
+
 **Libellé du plan :** le code technique reste `libre` (valeurs en base, API, gardes), mais **tous les libellés visibles disent « Standard »** (`get_plan_display()`, écrans opérateur, diffusion, Mon abonnement). Ne pas réintroduire « Libre » dans une interface.
+
+**`v2.8.0` — raffinements UI (déployée le 13/11)** : thème **clair par défaut** ; primitives `styles.css` partagées — inputs date/heure normalisés (fin de la date qui « descend » sous la rangée), `.filter-bar` (filtres alignés), `.export-actions` (boutons d'export unifiés, tous `btn-secondary`, impression comprise) ; composant partagé `app-export-actions` (rapports, journal de caisse, cotisations) ; liste des répétitions réorganisée (carte « prochaine répétition » en vedette, à venir proche→lointain, séparateur puis passées récent→ancien) ; **Mon espace** en-tête uniformisé façon admin (eyebrow « Mon espace » + titre d'onglet + sous-titre, même `page-shell`/padding, Mon abonnement compris) et onglet **Sécurité** redécoupé en cartes ; **Administration** sans tuiles — l'entrée de nav mène directement à la 1re section et reste active sur toutes les pages de gestion (`/administration` redirige). Validation : **1099 tests backend PostgreSQL**, **397 tests frontend**, build vert.
 
 **`v2.7.0` — communications, exports serveur, cloche & thème (déployée le 13/11)** : centre de communications opérateur (`/operateur/communications`, onglets SMS / E-mail / WhatsApp, filtres, résumé, export CSV ; journal `NotificationEmail`) ; **exports des listes produits par le serveur** (`?export=csv|pdf` sur membres, répertoire, caisse, cotisations, assiduité — liste complète filtrée/triée, gatés `exports`), générateur de document unifié (une palette « Papier & scène », un en-tête, un pied de page, CSV neutralisé) partagé rapports + listes, suppression du PDF client ; **padding standardisé sur TOUTES les pages** (le cas spécial `:has(.page-shell)` qui le limitait à l'administration est retiré ; les gouttières viennent de `.shell-content`, légèrement augmentées), `page-shell` généralisé aux écrans opérateur ; **cloche de notifications** (panneau déroulant, lu/non lu, « tout marquer lu », lien contextuel) et **thème clair / sombre / système** (`core/theme`, `styles-theme.css`, persistance, défaut système). Validation : **1099 tests backend PostgreSQL**, **392 tests frontend**, build vert.
 

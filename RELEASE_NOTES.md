@@ -1,5 +1,53 @@
 # Notes de version — ChoirManager
 
+## `v2.8.0` — raffinements UI (thème clair, filtres, Mon espace, administration)
+
+Date : 13 novembre 2026
+
+### Thème
+
+- **Mode clair par défaut** pour tout le monde. L'option « système » reste
+  disponible dans le sélecteur ; un choix explicite (clair/sombre/système) est
+  mémorisé et l'emporte.
+
+### Filtres, dates et exports
+
+- Inputs **date/heure normalisés** : même boîte que les autres champs, valeur
+  centrée, icône calendrier à droite — fin de la date qui descendait sous la
+  rangée de filtres (rapports et journal de caisse).
+- `.filter-bar` : rangées de filtres alignées (Période des rapports, filtres du
+  journal de caisse).
+- **Boutons d'export unifiés** : composant partagé `app-export-actions`, tous
+  en `btn-secondary` (impression comprise), groupés — mêmes couleurs partout
+  (rapports, journal, cotisations).
+
+### Répétitions (pointage)
+
+- Carte **« prochaine répétition »** mise en avant automatiquement.
+- Liste des répétitions **à venir** triée du plus proche au plus lointain, puis
+  un séparateur, puis les **passées** (de la plus récente à la plus ancienne).
+  Les filtres sont conservés.
+
+### Mon espace
+
+- En-tête **uniformisé** (format des pages d'administration) sur tous les
+  onglets, Mon abonnement compris : sur-titre « Mon espace », grand titre de
+  l'onglet, sous-titre ; même largeur/padding que les autres pages.
+- Onglet **Sécurité** redécoupé en cartes distinctes (e-mail & vérification,
+  changement d'e-mail, mot de passe), plus aéré.
+
+### Administration
+
+- Suppression du hub à tuiles : l'entrée de nav **Administration** ouvre
+  directement la première page accessible et reste **active** sur toutes les
+  pages de gestion ; `/administration` redirige (route conservée).
+
+### Validation
+
+- **1099 tests backend PostgreSQL**, **397 tests frontend**, build vert.
+
+---
+
 ## `v2.7.0` — communications, exports serveur, cloche & thème
 
 Date : 13 novembre 2026
