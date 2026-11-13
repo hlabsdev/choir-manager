@@ -1,5 +1,47 @@
 # Notes de version — ChoirManager
 
+## `v2.7.0` — communications, exports serveur, cloche & thème
+
+Date : 13 novembre 2026
+
+### Communications opérateur
+
+- Centre `/operateur/communications` : onglets **SMS | E-mail | WhatsApp**,
+  filtres (période, statut, chorale, destinataire), résumé, stats par chorale,
+  détail, **export CSV** par canal.
+- Nouveau journal `NotificationEmail` (destinataire, sujet, gabarit, statut,
+  erreur expurgée), écrit best-effort par `_envoyer_email`.
+
+### Exports serveur et impression unifiée
+
+- Les listes (membres, répertoire, caisse, cotisations, assiduité) sont
+  exportées **par le serveur** (`?export=csv|pdf`), sur la **liste complète
+  filtrée/triée** — plus de générateur PDF dans le navigateur.
+- Générateur de document **unifié** (rapports + listes) : une seule palette
+  « Papier & scène », un en-tête, un pied de page, un CSV à formules
+  neutralisées. Fin de l'ancienne palette violette.
+- Exports gatés `exports` (403 `fonctionnalite_non_incluse`, encart local).
+
+### Mise en page
+
+- **Padding standardisé sur toutes les pages** (utilisateurs ET opérateur) :
+  les gouttières viennent de `.shell-content`, légèrement augmentées ; le cas
+  spécial qui limitait l'élargissement à l'administration est supprimé.
+- `page-shell` généralisé (écrans opérateur inclus).
+
+### Cloche et thème
+
+- **Cloche de notifications** : panneau déroulant (récentes, lu / non lu,
+  « tout marquer comme lu », lien contextuel), la page `/notifications` reste.
+- **Thème clair / sombre / système** persisté, défaut système, sélecteur dans
+  le menu compte.
+
+### Validation
+
+- **1099 tests backend PostgreSQL**, **392 tests frontend**, build vert.
+
+---
+
 ## `v2.6.0` — design, exports et assiduité payante
 
 Date : 13 novembre 2026
