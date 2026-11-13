@@ -710,6 +710,67 @@ cherche. Douze mois couvrent un cycle complet de mandats.
 archivé ailleurs, et le journal d'audit est le seul endroit où figurent les
 échecs de connexion et les suppressions définitives.
 
+### Tâches planifiées — abonnements
+
+Deux commandes d'abonnement doivent tourner **une fois par jour** sur l'hôte.
+Au **13 novembre 2026**, aucune des deux n'est planifiée : la crontab root du
+VPS ne contient que la purge du journal d'audit et les rappels d'événements,
+`/etc/cron.d/` n'a aucun fichier ChoirManager, et aucun timer
+systemd ne les porte hors sauvegardes. Conséquence directe :
+`rappeler_echeances_abonnement` n'a **jamais tourné** — zéro événement
+d'audit correspondant en base. Les chorales ne reçoivent donc aujourd'hui aucun
+rappel d'échéance, et les transitions d'état ne sont appliquées par personne.
+
+**Ordre imposé : les transitions AVANT les rappels.** Les transitions fixent
+l'état du jour (`actif` → `grace` → `lecture_seule`, et
+`pionnier` → `libre` à l'échéance) ; les rappels lisent ensuite cet
+état et ignorent les abonnements déjà en `lecture_seule`. Lancés dans
+l'autre ordre, ils calculeraient leurs paliers sur un état périmé — un rappel
+« votre échéance approche » partirait vers une chorale que la même nuit vient
+de basculer.
+
+```bash
+make prod-transitions-abonnement   # python manage.py transitions_abonnements
+make prod-rappels-abonnement       # python manage.py rappeler_echeances_abonnement --jours 30,7
+```
+
+Heures proposées : **05:30** pour les transitions, **05:45** pour les rappels.
+Les deux passent après les purges de 04:17 et 04:23, et bien avant les rappels
+d'événements de 11:00 ; le quart d'heure d'écart laisse la première finir avant
+que la seconde ne lise son état, sans jamais chevaucher les autres tâches.
+
+```cron
+# Abonnements — TRANSITIONS D'ABORD, rappels ensuite (cf. section ci-dessus).
+# Le dépôt de production vit dans /root/choir-manager (PAS /srv/chm/choir-manager).
+30 5 * * * cd /root/choir-manager && make prod-transitions-abonnement >> /var/log/chm-transitions-abonnement.log 2>&1
+45 5 * * * cd /root/choir-manager && make prod-rappels-abonnement >> /var/log/chm-rappels-abonnement.log 2>&1
+```
+
+> ⚠️ **Ces lignes ne sont PAS installées par le dépôt ; leur installation sur
+> l'hôte est un acte d'exploitation.** Aucune cible `make`, aucune migration,
+> aucun démarrage de la pile ne les pose. Tant qu'un humain ne les a pas
+> ajoutées à la crontab root, les deux commandes restent sans exécution — c'est
+> exactement l'état constaté au 13/11/2026.
+
+Vérification en **LECTURE SEULE** — elle n'installe rien :
+
+```bash
+# 1. Ce que l'hôte exécute réellement (aucune écriture)
+sudo crontab -l
+
+# 2. Contrôle applicatif, sans transition ni envoi
+cd /root/choir-manager
+docker compose -f compose.yaml -f compose.prod.yaml exec -T backend \
+  python manage.py transitions_abonnements --dry-run
+docker compose -f compose.yaml -f compose.prod.yaml exec -T backend \
+  python manage.py rappeler_echeances_abonnement --jours 30,7 --dry-run
+```
+
+`--dry-run` n'écrit **strictement rien** (ni transition, ni historique,
+ni notification) et affiche ce qui serait fait. Les deux commandes sont
+idempotentes : les rejouer le même jour ne duplique ni transition ni rappel
+(une seule notification par chorale, par échéance et par palier).
+
 ### Atteindre le backend directement
 
 Dans la pile cible, le backend **ne publie aucun port** : il n'est joignable que

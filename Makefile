@@ -23,7 +23,7 @@ HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
         _prod-check-deploy prod-retour-arriere prod-restauration \
         prod-up prod-down prod-build prod-migrate prod-logs prod-ps \
         prod-shell prod-smoke prod-sauvegarde prod-verif-sauvegarde prod-restauration-test \
-        prod-rappels
+        prod-rappels prod-transitions-abonnement prod-rappels-abonnement
 
 # ---------------------------------------------------------------------------
 # Aide
@@ -402,6 +402,15 @@ prod-migrate: ## PROD — applique les migrations (service one-shot)
 
 prod-rappels: ## PROD — envoie les rappels des événements à venir (à planifier)
 	$(COMPOSE_PROD) exec -T backend python manage.py rappeler_evenements --jours 1
+
+# Abonnements : les transitions d'abord, les rappels ensuite — les secondes
+# lisent l'état fixé par les premières (cf. docs/DEPLOIEMENT.md
+# « Tâches planifiées — abonnements »).
+prod-transitions-abonnement: ## PROD — applique les transitions d'abonnement dues (à planifier, AVANT les rappels)
+	$(COMPOSE_PROD) exec -T backend python manage.py transitions_abonnements
+
+prod-rappels-abonnement: ## PROD — envoie les rappels d'échéance d'abonnement (à planifier, APRÈS les transitions)
+	$(COMPOSE_PROD) exec -T backend python manage.py rappeler_echeances_abonnement --jours 30,7
 
 prod-waha-init: ## PROD — initialise la session WhatsApp WAHA et récupère le QR
 	@$(COMPOSE_PROD) up -d --wait waha
