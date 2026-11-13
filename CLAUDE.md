@@ -964,6 +964,25 @@ sans motif lève `ValueError`, quel que soit le point d'entrée (admin, API,
 commande). Les transitions **automatiques** en sont dispensées. Ne pas déplacer
 cette garde dans le seul formulaire admin.
 
+### Page publique `/abonnement` (C2)
+
+La page **publique** `/abonnement` est une route de **premier niveau**, **sans garde**
+(accessible en anonyme comme connecté), distincte de `/mon-abonnement` (onglet de Mon
+espace, dans la coquille) : ici on vend, là on constate un état.
+Elle n'appelle que deux endpoints **publics en lecture seule** :
+`GET /api/abonnements/tarifs/` et `GET /api/abonnements/fonctionnalites/` — le registre
+A2 exposé publiquement pour éviter de dupliquer dans le front la liste des
+fonctionnalités payantes.
+
+Règle d'affichage : liste vide ou montant à 0 → **« Tarif sur demande »**, jamais un prix
+à 0 ; « 2 mois offerts » reste **éditorial**, jamais calculé.
+
+⚠️ Cette page ne doit **JAMAIS** appeler un endpoint authentifié
+(`/api/abonnements/droits/`) : un 401 en anonyme déclenche le refresh puis la
+déconnexion de l'intercepteur. Points d'entrée : pieds de page des 4 pages publiques,
+CTA « Comment passer en Pro ? » de Mon abonnement, lien « Voir les offres » de l'encart
+de refus.
+
 ### Planning & assiduité — le calendrier unifié
 
 Le module `planning` ne duplique PAS `presences.Repetition` : la répétition
