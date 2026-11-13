@@ -56,8 +56,8 @@ Date : 12 novembre 2026
 
 ### Validation
 
-- **912 tests backend PostgreSQL** (dont concurrence des transitions et des
-  corrections), **266 tests frontend**, build de production vert.
+- **989 tests backend PostgreSQL** (dont concurrence des transitions et des
+  corrections), **307 tests frontend**, build de production vert.
 - Migration exercée sur une **copie du dump de production** : 11 chorales →
   11 abonnements, tous `pionnier`/`actif` au 31/12/2026, migration inverse puis
   ré-application vérifiées.
