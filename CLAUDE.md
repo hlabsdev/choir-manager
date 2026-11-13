@@ -1026,6 +1026,13 @@ plafonné ; il ne sert qu'au premier SMS d'une série ou d'un événement, jamai
 uniquement si l'événement a `notifier_sms=True`. Aucun envoi WhatsApp/SMS de
 masse, aucune clé dans le dépôt ou les logs.
 
+⚠️ **Succès fournisseur** : WassaSMS répond HTTP 200 avec `{"state":"success"}`.
+La décision est centralisée dans `notifications/sms.py::_reponse_est_un_succes()`,
+helper PUR et seule autorité : il accepte aussi le texte `success...` historique,
+refuse `failed` et tout état inconnu. Interdit de réintroduire un `startswith`
+inline (bug du 13/11 : 40 SMS partis journalisés `echec`, B1 à zéro). Les lignes
+historiques restent en `echec` — on ne réécrit pas un journal, la correction est prospective.
+
 **Notifications.** La création d'un événement notifie en in-app tous les
 membres actifs/stagiaires sauf l'auteur (`notifier_groupe`). La commande
 `manage.py rappeler_evenements --jours 1` envoie un rappel in-app + email
