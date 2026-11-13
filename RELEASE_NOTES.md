@@ -1,5 +1,58 @@
 # Notes de version — ChoirManager
 
+## `v2.6.0` — design, exports et assiduité payante
+
+Date : 13 novembre 2026
+
+### Design et impression
+
+- Largeur utile unifiée (`.page-shell`), gouttières réduites en web, mobile
+  préservé : les rapports et les autres pages ont la même largeur.
+- Fiche d'impression refaite : en-tête de document, A4, en-tête de tableau
+  répété, lignes insécables, contrôles masqués.
+- KPI financiers bornés (plus de débordement des montants).
+
+### Listes, exports et vues
+
+- Exports **CSV, PDF et impression** de la liste complète des membres (tri
+  nom/pupitre respecté) et des morceaux.
+- Bascule **liste/grille** mémorisée sur les membres et les chants.
+- Journal de caisse en pleine largeur ; aperçu des campagnes déplacé sous le
+  journal.
+
+### Onglets et navigation
+
+- Brique partagée `section-nav` (onglets + fil d'Ariane, `role=tablist`,
+  focus visible, 44 px).
+- Présences : **Pointage / Permissions / Assiduité** ; Mon espace :
+  **Infos / Sécurité / Cotisations / Présences / Mon abonnement**.
+- `/statistiques` et `/mon-abonnement` restent des liens profonds valides.
+
+### Planning et assiduité
+
+- Gratuit : calendrier, événements et répétitions uniques, RSVP, pointage.
+- Payant : séries récurrentes au-delà de **2 séries actives** en `libre`
+  (illimité en `pro`), assiduité (analytique), exports, rappels.
+- Répétitions **uniques ou récurrentes** créables directement depuis le
+  pointage (répétitions uniquement).
+- Refus `limite_planning_atteinte` avec message exact ; séries existantes
+  grand-pérées.
+
+### SMS opérateur
+
+- Numéros normalisés **E164 sans `+`** (`+228 98 66 04 36` →
+  `22898660436`), validés par pays.
+- `NotificationSMS` enrichi (numéro normalisé/origine, fournisseur, statut,
+  message_id, réponse expurgée).
+- Écran `/operateur/sms` : résumé, filtres (période, statut, chorale, numéro),
+  pagination, détail.
+
+### Validation
+
+- **1040 tests backend PostgreSQL**, **358 tests frontend**, build vert.
+
+---
+
 ## `v2.5.0` — abonnement par chorale et console opérateur
 
 Date : 12 novembre 2026

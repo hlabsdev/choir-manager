@@ -22,11 +22,25 @@ rapports. API Django REST + frontend Angular 21.
 **État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v2.4.0` (déployé le
 12/11), sur https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
-passent respectivement 989 tests (6 ignorés) et 307 tests, **suite complète
+passent respectivement 1040 tests (6 ignorés) et 358 tests, **suite complète
 verte**. Le self-service du profil est publié sur `main`.
 
-**`v2.5.0` — abonnement par chorale et console opérateur (en cours, non
-déployée)** : app `abonnements` (A1 : modèle 1:1, historique append-only,
+**`v2.6.0` — design et exports (déployée le 13/11)** : largeur de page unifiée
+(`.page-shell`), impression refaite (en-tête de document, A4, en-tête de
+tableau répété, plus aucun contrôle imprimé), exports **CSV/PDF/impression**
+des listes (membres, chants, finances) avec tri/filtre respectés, bascule
+liste/grille mémorisée, KPI financiers bornés, journal de caisse en pleine
+largeur et aperçu des campagnes déplacé ; onglets + fil d'Ariane généralisés
+(`layout/section-nav`) sur Présences (Pointage / Permissions / Assiduité) et
+Mon espace (Infos / Sécurité / Cotisations / Présences / Mon abonnement,
+abonnement inclus dans un onglet) ; planning payant (`planning_recurrence`,
+2 séries max en `libre`, illimité en `pro`) et **assiduité payante**
+(`assiduite`) ; répétitions récurrentes créables depuis le pointage ; SMS
+normalisés E164 sans `+` (`228…`), journalisés et consultables dans
+`/operateur/sms`. Validation : **1040 tests backend PostgreSQL**, **358 tests
+frontend**, build vert.
+
+**`v2.5.0` — abonnement par chorale et console opérateur (déployée le 12/11)** : app `abonnements` (A1 : modèle 1:1, historique append-only,
 service unique, backfill `pionnier` au 31/12/2026, commande quotidienne,
 garde structurelle), registre de fonctionnalités et verrou serveur (A2 :
 défaut fermé, 403 `fonctionnalite_non_incluse`, endpoint
