@@ -22,7 +22,7 @@ rapports. API Django REST + frontend Angular 21.
 **État** : **EN PRODUCTION** depuis le 2 août 2026, tag `v2.4.0` (déployé le
 12/11), sur https://choirmanager.sankof.tech (VPS Sankof, derrière la passerelle
 `mrs-gateway`). Pilote ouvert à trois chorales réelles. Backend et frontend
-passent respectivement 912 tests (6 ignorés) et 266 tests, **suite complète
+passent respectivement 968 tests (6 ignorés) et 279 tests, **suite complète
 verte**. Le self-service du profil est publié sur `main`.
 
 **`v2.5.0` — abonnement par chorale et console opérateur (en cours, non
@@ -46,9 +46,13 @@ mandats créer/clôturer, postes/groupes — endpoint dédié, motif obligatoire
 avant/après audité, capture automatique suspendue pour éviter le doublon),
 navigation à deux niveaux (P5 : rail à 4 groupes, hub `/administration`,
 barre d'onglets et fil d'Ariane sur les six écrans de gestion, feuille
-mobile raccourcie). Décisions et découpage :
-`docs/packs/abonnement-verrou.md`. Validation : **912 tests backend
-PostgreSQL**, **266 tests frontend**, build vert.
+mobile raccourcie), diffusion opérateur (app `diffusion` : annonce à toutes
+les chorales, un groupe ou une seule ; e-mail par défaut, SMS et WhatsApp
+en option ; repli sur le premier responsable ; historique et audit) et
+rappels d'échéance (`rappeler_echeances_abonnement --jours 30,7`,
+idempotents). Décisions et découpage :
+`docs/packs/abonnement-verrou.md`. Validation : **968 tests backend
+PostgreSQL**, **279 tests frontend**, build vert.
 
 **`v2.4.0` — listes de sélection par tenant, taguée sur `main`, déployée le
 12/11** : socle `core.Liste`/`core.ValeurListe`, API scopée tenant, écran

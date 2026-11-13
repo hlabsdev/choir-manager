@@ -36,6 +36,18 @@ Date : 12 novembre 2026
   structuré, une seule ligne d'audit par action.
 - Fermeture de l'accès global implicite de l'opérateur aux ViewSets métier.
 
+### Diffusion opérateur et rappels d'échéance
+
+- **Diffusion** (app `diffusion/`) : l'opérateur compose une annonce pour
+  **toutes** les chorales, un **groupe** (plan ou sélection) ou **une seule**.
+  E-mail par défaut, SMS et WhatsApp en option. Les destinataires sont résolus
+  par chorale — e-mail de contact, repli sur le premier responsable ; téléphone
+  du responsable, repli sur le téléphone de la chorale. Prévisualisation avant
+  envoi, compte-rendu par canal, historique consultable, audit.
+- **Rappels d'échéance** : `manage.py rappeler_echeances_abonnement
+  --jours 30,7 [--dry-run]`, idempotent, notifie le Bureau à J-30 et J-7 avec
+  le plan, la date et un lien vers `/mon-abonnement`.
+
 ### Navigation
 
 - Rail à **4 groupes** et hub `/administration` ; barre d'onglets et fil
