@@ -921,6 +921,27 @@ volume de session vide. Procédure complète — numéro dédié, scan, vérific
 `WORKING`, sauvegarde du volume, remèdes — dans
 [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
+### Abonnement & verrou serveur (pack C1)
+
+La grille tarifaire vit dans `abonnements.TarifPlan` (migration `0005`) : un
+tarif est un triplet `(plan, périodicité, devise)`, jamais un prix annuel figé.
+Seul `pro` s'y vend (`libre`/`pionnier` sont gratuits) ; une contrainte
+partielle n'autorise qu'UNE ligne `actif=True` par triplet, l'historique restant
+en lignes inactives. `quota_sms` est réservé au pack B.
+
+`GET /api/abonnements/tarifs/` est **public** (`AllowAny`, aucune donnée de
+tenant) et n'expose que les lignes actives ; la grille s'édite dans l'admin
+opérateur. `manage.py gerer_abonnement --chorale X --etat` lit sans écrire ;
+un changement passe par `--plan/--periodicite/--echeance` avec `--motif`
+obligatoire (`--dry-run` n'écrit rien). Les actions d'admin « Activer Pro
+12 mois » / « Repasser Standard » exigent aussi un motif.
+
+La garde de motif vit **AUSSI dans le service**
+`abonnements/services.py::changer_etat` : toute transition `source=MANUEL`
+sans motif lève `ValueError`, quel que soit le point d'entrée (admin, API,
+commande). Les transitions **automatiques** en sont dispensées. Ne pas déplacer
+cette garde dans le seul formulaire admin.
+
 ### Planning & assiduité — le calendrier unifié
 
 Le module `planning` ne duplique PAS `presences.Repetition` : la répétition
