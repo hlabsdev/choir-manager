@@ -2,9 +2,10 @@
 
 Trois règles, nées d'incidents réels, et le test qui empêche chacune de
 revenir. **Avant toute livraison : `make coherence`** (depuis la racine du
-superprojet). La cible lance `core/tests/test_coherence_admin.py` et
-`core/tests/test_coherence_livraison.py` ; elle est rapide, sans base, et
-peut tourner à chaque commit.
+superprojet). La cible couvre **backend ET front** : les gardes backend
+(`core/tests/test_coherence_admin.py`, `core/tests/test_coherence_livraison.py`)
+puis **toute** la suite front (`npm run test:ci`, contrat des modales compris).
+Quelques secondes, sans base, donc utilisable à chaque commit.
 
 ---
 
@@ -105,5 +106,19 @@ sans venv local :
 make coherence PYTHON=/chemin/vers/chm-backend/venv/bin/python
 ```
 
-Pour prouver qu'un test mord, introduire volontairement la régression, voir
-`make coherence` échouer, puis restaurer — sans committer la régression.
+Elle enchaîne deux étapes, et s'arrête à la première en échec :
+
+1. **▸ Cohérence backend** — `pytest` sur les deux fichiers de cohérence
+   (statiques, sans base) ;
+2. **▸ Contrat front** — `npm --prefix chm-frontend run test:ci`, c'est-à-dire
+   **toute** la suite front, pas seulement le spec des modales. Une régression
+   front quelconque bloque donc la cohérence ; l'ensemble coûte ~5 s.
+
+Le front exige `chm-frontend/node_modules` (dans un worktree, un symlink vers
+le `node_modules` d'un checkout existant suffit : aucune réinstallation). En
+son absence, la cible s'arrête avec la commande à lancer, plutôt qu'un échec
+cryptique de `ng`.
+
+Pour prouver qu'un test mord, introduire volontairement la régression (côté
+backend ou front), voir `make coherence` échouer, puis restaurer — sans
+committer la régression.

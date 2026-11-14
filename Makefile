@@ -149,13 +149,28 @@ test: test-backend test-frontend ## Suite complète backend + frontend
 test-backend: ## pytest sous PostgreSQL
 	$(COMPOSE) run --rm backend pytest -q
 
-coherence: ## Vérifie les règles de cohérence de livraison (tests statiques backend)
+# `coherence` couvre les DEUX côtés, dans cet ordre :
+#   1. les gardes statiques backend (rapides, sans base) ;
+#   2. la suite front COMPLÈTE via `test:ci`, et pas seulement le spec des
+#      modales : toute régression front (composant, service, contrat) doit
+#      bloquer la livraison. Coût assumé (~5 s), très inférieur à celui d'un
+#      aller-retour de livraison cassée.
+coherence: ## Vérifie la cohérence de livraison : backend ET front
 	@test -x "$(PYTHON)" || { \
 	  echo "ERREUR — interpréteur backend introuvable : $(PYTHON)"; \
 	  echo "  Créez chm-backend/venv (cf. README) ou surchargez :"; \
 	  echo "    make coherence PYTHON=/chemin/vers/chm-backend/venv/bin/python"; \
 	  false; }
-	cd chm-backend && "$(PYTHON)" -m pytest core/tests/test_coherence_admin.py core/tests/test_coherence_livraison.py -q
+	@test -d "chm-frontend/node_modules" || { \
+	  echo "ERREUR — dépendances front absentes : chm-frontend/node_modules"; \
+	  echo "  Installez-les une fois : (cd chm-frontend && npm install)"; \
+	  echo "  ou, dans un worktree, liez un node_modules existant :"; \
+	  echo "    ln -s /chemin/vers/chm-frontend/node_modules chm-frontend/node_modules"; \
+	  false; }
+	@echo "▸ Cohérence backend"
+	@cd chm-backend && "$(PYTHON)" -m pytest core/tests/test_coherence_admin.py core/tests/test_coherence_livraison.py -q
+	@echo "▸ Contrat front"
+	@npm --prefix chm-frontend run test:ci
 
 test-frontend: ## Vitest
 	$(COMPOSE) run --rm --entrypoint sh frontend -c "echo 'Tests front : exécuter sur l'\''hôte via npm test (image de production sans devDependencies)'"
