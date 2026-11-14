@@ -1182,6 +1182,18 @@ formulation « aucun script inline n'est produit par le build » dans
   la résolution globale doit rendre le test rouge (protocole et tableau des
   quatre mutations de référence dans `chm-backend/README.md`).
 
+### Cohérence de livraison — vérifications automatiques
+
+`make coherence` lance les gardes des familles de coquilles qui ont réellement
+coûté ; détail et symptômes dans [docs/CHECKLIST_LIVRAISON.md](docs/CHECKLIST_LIVRAISON.md).
+Trois règles, chacune tenue par un test :
+
+- **Une vérité = un endroit** : aucune valeur dupliquée front/back (contact, fonctionnalités, tarifs) — si elle est côté serveur, le front la LIT.
+- **Écrire par la couche qui porte les garanties** : `save()` plutôt que `queryset.update()` quand `updated_at`/signaux/audit comptent, service plutôt qu'écriture directe.
+- **Jamais hors du système de design** : classes Django (`module`, `submit-row`) en admin, largeurs de modale documentées.
+
+Lancer avant chaque livraison : `make coherence`.
+
 ### Sécurité — trois acquis à ne pas défaire
 
 Livrés avant la mise en production (lots 1 à 3), chacun validé par mutation.
