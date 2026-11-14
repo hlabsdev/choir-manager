@@ -1184,9 +1184,12 @@ formulation « aucun script inline n'est produit par le build » dans
 
 ### Cohérence de livraison — vérifications automatiques
 
-`make coherence` lance les gardes des familles de coquilles qui ont réellement
-coûté ; détail et symptômes dans [docs/CHECKLIST_LIVRAISON.md](docs/CHECKLIST_LIVRAISON.md).
-Trois règles, chacune tenue par un test :
+`make coherence` couvre **backend ET front**, dans cet ordre : les gardes des
+familles de coquilles ci-dessous (statiques, sans base), puis **toute** la suite
+front (`npm --prefix chm-frontend run test:ci`), contrat des modales compris.
+Une régression front quelconque bloque donc la cohérence. Détail et symptômes
+dans [docs/CHECKLIST_LIVRAISON.md](docs/CHECKLIST_LIVRAISON.md). Trois règles,
+chacune tenue par un test :
 
 - **Une vérité = un endroit** : aucune valeur dupliquée front/back (contact, fonctionnalités, tarifs) — si elle est côté serveur, le front la LIT.
 - **Écrire par la couche qui porte les garanties** : `save()` plutôt que `queryset.update()` quand `updated_at`/signaux/audit comptent, service plutôt qu'écriture directe.
