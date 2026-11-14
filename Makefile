@@ -12,12 +12,17 @@ COMPOSE_API  := docker compose -f compose.yaml -f compose.api-direct.yaml
 # sans image ni variables.
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
 HORODATAGE   := $(shell date +%Y%m%d-%H%M%S)
+# Interpréteur backend des cibles qui tournent HORS Docker (ex. `make coherence`).
+# Priorité à `PY` s'il est exporté (worktree sans venv local), sinon le venv du
+# sous-module. Surchargeable explicitement :
+#   make coherence PYTHON=/chemin/vers/chm-backend/venv/bin/python
+PYTHON       ?= $(or $(PY),$(CURDIR)/chm-backend/venv/bin/python)
 
 .DEFAULT_GOAL := aide
 .PHONY: aide hooks verif-sous-modules env config build up up-api up-frontend up-backend dev down logs ps \
         migrate makemigrations check check-deploy verif-pdf shell dbshell \
         superuser provision seed purge-tokens waha-init prod-waha-init \
-        test test-backend test-frontend collect front-build smoke-medias \
+        test test-backend test-frontend coherence collect front-build smoke-medias \
         sauvegarde restauration audit-image nettoyage-jetable \
         prod-deploie prod-sauvegarde-pre-deploiement _prod-verifie-progression \
         _prod-check-deploy prod-retour-arriere prod-restauration \
@@ -143,6 +148,14 @@ test: test-backend test-frontend ## Suite complète backend + frontend
 
 test-backend: ## pytest sous PostgreSQL
 	$(COMPOSE) run --rm backend pytest -q
+
+coherence: ## Vérifie les règles de cohérence de livraison (tests statiques backend)
+	@test -x "$(PYTHON)" || { \
+	  echo "ERREUR — interpréteur backend introuvable : $(PYTHON)"; \
+	  echo "  Créez chm-backend/venv (cf. README) ou surchargez :"; \
+	  echo "    make coherence PYTHON=/chemin/vers/chm-backend/venv/bin/python"; \
+	  false; }
+	cd chm-backend && "$(PYTHON)" -m pytest core/tests/test_coherence_admin.py core/tests/test_coherence_livraison.py -q
 
 test-frontend: ## Vitest
 	$(COMPOSE) run --rm --entrypoint sh frontend -c "echo 'Tests front : exécuter sur l'\''hôte via npm test (image de production sans devDependencies)'"
